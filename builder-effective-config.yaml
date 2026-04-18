@@ -1,0 +1,33 @@
+directories:
+  output: .
+  buildResources: build
+appId: com.archiva.app
+productName: Archiva
+win:
+  target: portable
+  icon: logo/Archiva-icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  installerIcon: logo/Archiva-icon.png
+  uninstallerIcon: logo/Archiva-icon.png
+  runAfterFinish: true
+appx:
+  identityName: Archiva
+  publisher: CN=Archiva
+  publisherDisplayName: Archiva
+asar: true
+compression: maximum
+files:
+  - filter:
+      - src/**/*
+      - main.js
+      - logo/**/*
+      - package.json
+      - node_modules/**/*
+      - .env
+extraResources:
+  - from: backend/watcher.exe
+    to: backend/watcher.exe
+electronVersion: 41.2.0

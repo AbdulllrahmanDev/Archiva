@@ -1,0 +1,34 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('api', {
+    onDocumentsUpdate: (callback) => {
+        ipcRenderer.removeAllListeners('documents-update');
+        ipcRenderer.on('documents-update', (event, docs) => callback(docs));
+    },
+    onStatusUpdate: (callback) => {
+        ipcRenderer.removeAllListeners('status-update');
+        ipcRenderer.on('status-update', (event, status) => callback(status));
+    },
+    getDocuments: () => ipcRenderer.invoke('get-documents'),
+    selectFiles: () => ipcRenderer.invoke('select-files'),
+    processUploads: (files) => ipcRenderer.invoke('process-uploads', files),
+    openPath: (path) => ipcRenderer.invoke('open-path', path),
+    exportFile: (sourcePath, defaultName) => ipcRenderer.invoke('export-file', sourcePath, defaultName),
+    sendChat: (messages) => ipcRenderer.invoke('ai-chat', messages),
+    deleteDocument: (id, filePath) => ipcRenderer.invoke('delete-document', id, filePath),
+    deleteMultipleDocuments: (docs) => ipcRenderer.invoke('delete-multiple-documents', docs),
+    clearArchive: () => ipcRenderer.invoke('clear-archive'),
+    sendReady: () => ipcRenderer.send('web-ready'),
+    // Memory / Import feature
+    selectImportFolder: () => ipcRenderer.invoke('select-import-folder'),
+    importFolder: (folderPath) => ipcRenderer.invoke('import-folder', folderPath),
+    
+    // Storage Configuration
+    getStorageFolder: () => ipcRenderer.invoke('get-storage-folder'),
+    changeStorageFolder: () => ipcRenderer.invoke('change-storage-folder'),
+
+    // Document Editing
+    updateDocument: (id, fields) => ipcRenderer.invoke('update-document', id, fields),
+    reprocessDocument: (id, filePath) => ipcRenderer.invoke('reprocess-document', id, filePath),
+    setNativeTheme: (theme) => ipcRenderer.send('set-native-theme', theme)
+});

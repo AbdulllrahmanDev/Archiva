@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Archiva</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=block"
+        rel="stylesheet" />
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Marked.js CDN for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "var(--on-primary-container)",
+                        "on-surface": "var(--on-surface)",
+                        "surface-container-low": "var(--surface-container-low)",
+                        "surface-container-highest": "var(--surface-container-highest)",
+                        "error": "var(--error)",
+                        "surface-container-lowest": "var(--surface-container-lowest)",
+                        "on-surface-variant": "var(--on-surface-variant)",
+                        "outline": "var(--outline)",
+                        "tertiary-fixed-dim": "var(--tertiary-fixed-dim)",
+                        "surface-tint": "var(--surface-tint)",
+                        "surface-dim": "var(--surface-dim)",
+                        "surface-variant": "var(--surface-variant)",
+                        "surface-container": "var(--surface-container)",
+                        "surface-bright": "var(--surface-bright)",
+                        "on-error": "var(--on-error)",
+                        "secondary": "var(--secondary)",
+                        "primary-container": "var(--primary-container)",
+                        "primary": "var(--primary)",
+                        "outline-variant": "var(--outline-variant)",
+                        "primary-dim": "var(--primary-dim)",
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Optimized SVG Icon Styles */
+        .icon-svg {
+            width: 1.5rem;
+            height: 1.5rem;
+            fill: currentColor;
+            display: inline-block;
+            vertical-align: middle;
+            transition: all 0.3s var(--cubic-premium);
+        }
+
+        .icon-svg.sm {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .icon-svg.lg {
+            width: 2rem;
+            height: 2rem;
+        }
+
+        .icon-svg.xl {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        /* FOUC Protection - Hide body until renderer signals ready */
+        body.loading {
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
+
+        /* Settings Modal Styles */
+        .active-theme {
+            background-color: var(--primary-container);
+            color: var(--on-primary-container);
+            box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.1);
+        }
+
+        .active-lang {
+            background-color: var(--primary-container);
+            color: var(--on-primary-container);
+        }
+
+        /* View Switcher Active State */
+        .view-switcher-btn.active {
+            background-color: #ffffff;
+            color: #3b6090;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-radius: 0.85rem;
+        }
+
+        html.dark .view-switcher-btn.active {
+            background-color: #283439;
+            color: #d4e3ff;
+        }
+
+        html {
+            transition: background-color 0.4s var(--cubic-premium), color 0.4s var(--cubic-premium);
+        }
+
+        /* Animations */
+        @keyframes scale-up {
+            from {
+                transform: scale(0.95);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .animate-scale-up {
+            animation: scale-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+    </style>
+</head>
+
+<body class="loading bg-background font-body text-on-surface antialiased min-h-screen">
+    <!-- Top Header (Scrolls Away) -->
+    <header
+        class="absolute top-0 left-0 w-full z-40 flex justify-between items-start px-8 py-6 font-['Manrope'] antialiased tracking-tight bg-transparent pointer-events-none">
+        <!-- Logo Section -->
+        <div class="flex items-center gap-3 pointer-events-auto">
+            <img src="../logo/Archiva.svg" alt="Archiva Logo" class="w-10 h-10 object-contain drop-shadow-sm">
+        </div>
+
+        <!-- Settings Button Section -->
+        <div class="flex items-center justify-end pointer-events-auto">
+            <button id="settings-open-btn"
+                class="p-3 text-on-surface-variant/40 dark:text-primary/70 hover:text-primary transition-all rounded-full hover:bg-surface-container-lowest">
+                <svg class="icon-svg sm" viewBox="0 0 24 24">
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg></button>
+        </div>
+    </header>
+
+    <!-- Fixed Centered Navigation Group -->
+    <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+        <nav class="relative border border-primary/20 dark:border-white/10 p-1 rounded-2xl flex items-center gap-1 bg-white/50 dark:bg-black/40 backdrop-blur-2xl shadow-lg shadow-black/5 dark:shadow-black/20"
+            id="nav-group">
+            <!-- Sliding Indicator Box (Solid Blue) -->
+            <div id="nav-indicator"
+                class="absolute h-[calc(100%-8px)] rounded-xl bg-primary shadow-md shadow-primary/20 transition-all duration-500 ease-[cubic-bezier(0.2,0,0,1)] z-0">
+            </div>
+
+            <button
+                class="nav-btn relative z-10 p-2.5 rounded-xl text-slate-500 dark:text-primary/70 hover:text-primary transition-all flex items-center justify-center"
+                id="nav-add" title="Add Document">
+                <svg class="icon-svg" viewBox="0 0 24 24">
+                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                </svg>
+            </button>
+            <button
+                class="nav-btn relative z-10 p-2.5 rounded-xl text-slate-500 dark:text-primary/70 hover:text-primary transition-all flex items-center justify-center"
+                id="nav-archive" title="Library">
+                <svg class="icon-svg" viewBox="0 0 24 24">
+                    <path
+                        d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm11-5.5l-4 4-4-4 1.41-1.41L11 13.67V10h2v3.67l1.59-1.59L16 13.5z" />
+                </svg>
+            </button>
+            <button
+                class="nav-btn relative z-10 p-2.5 rounded-xl text-slate-500 dark:text-primary/70 hover:text-primary transition-all flex items-center justify-center"
+                id="nav-ai" title="AI Intelligence">
+                <svg class="icon-svg" viewBox="0 0 24 24">
+                    <path
+                        d="M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5 5.5-2.5-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z" />
+                </svg>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Main Viewport (Dynamic Content) -->
+    <main id="app-viewport" class="pt-20">
+        <!-- Content will be injected here via renderer.js -->
+    </main>
+
+    <!-- Insight Rail (Side Panel - Floating) -->
+    <aside id="insight-rail"
+        class="fixed right-0 top-20 bottom-0 w-80 bg-surface-container-low translate-x-full transition-transform duration-500 ease-[cubic-bezier(0.2,0,0,1)] z-40 hidden xl:flex flex-col p-6 overflow-y-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-on-surface-variant font-label">Intelligence</h3>
+            <button id="close-rail" class="text-on-surface-variant hover:text-primary transition-colors">
+                <svg class="icon-svg sm" viewBox="0 0 24 24">
+                    <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+        <div id="rail-content" class="space-y-6">
+            <!-- AI Insights and Metadata injected here -->
+        </div>
+    </aside>
+
+    <!-- Status Toast (Global Floating Status) -->
+    <div id="status-toast"
+        class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-surface-container-lowest/80 backdrop-blur-2xl px-6 py-4 rounded-[2rem] shadow-[0px_12px_48px_rgba(0,0,0,0.15)] border border-white/10 dark:border-white/5 z-[100] flex items-center gap-6 transition-all duration-700 opacity-0 pointer-events-none scale-90">
+        <div class="flex items-center gap-4">
+            <div id="status-icon-container"
+                class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary animate-pulse-subtle">
+                <svg class="icon-svg sm" viewBox="0 0 24 24">
+                    <path
+                        d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                </svg>
+            </div>
+            <div class="flex flex-col">
+                <span id="status-text" class="text-sm font-bold text-on-surface leading-tight transition-all">...</span>
+                <div id="progress-container"
+                    class="hidden mt-2 w-32 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                    <div id="progress-bar" class="bg-primary h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Library Button (Hidden by default, shown when staging or processing) -->
+        <div id="status-actions" class="h-8 border-l border-outline-variant/10 pl-6 flex items-center hidden">
+            <button id="toast-view-btn"
+                class="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 flex items-center gap-2 whitespace-nowrap">
+                <span>View Library</span>
+                <svg class="icon-svg xs" viewBox="0 0 24 24">
+                    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div id="settings-backdrop" class="absolute inset-0 bg-black/60 backdrop-blur-md"></div>
+        <div class="relative w-85 bg-surface-container-lowest border border-outline-variant/10 rounded-[2.5rem] shadow-2xl animate-scale-up overflow-hidden">
+            <div class="p-8 space-y-10">
+                <div class="flex items-center justify-between">
+                    <h2 id="settings-title" class="text-[11px] font-black uppercase tracking-[0.25em] text-on-surface-variant/40 font-label">Settings</h2>
+                    <div class="h-1 w-12 bg-outline-variant/10 rounded-full"></div>
+                </div>
+
+                <!-- Appearance Section -->
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between">
+                        <p id="theme-label" class="text-xs font-bold text-on-surface">Appearance</p>
+                    </div>
+                    <div class="segmented-control bg-surface-container-low p-1.5 rounded-2xl relative flex items-center">
+                        <div id="theme-indicator" class="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-surface-container-highest rounded-xl shadow-sm transition-all duration-500 ease-[cubic-bezier(0.2,0,0,1)]"></div>
+                        <button id="theme-light-btn" class="relative z-10 flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-all" type="button">
+                            Light
+                        </button>
+                        <button id="theme-dark-btn" class="relative z-10 flex-1 flex items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest transition-all" type="button">
+                            Dark
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Language Section -->
+                <div class="space-y-5">
+                    <div class="flex items-center justify-between">
+                        <p id="language-label" class="text-xs font-bold text-on-surface">Language</p>
+                    </div>
+                    <div class="segmented-control bg-surface-container-low p-1.5 rounded-2xl relative flex items-center">
+                        <div id="lang-indicator" class="absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] bg-surface-container-highest rounded-xl shadow-sm transition-all duration-500 ease-[cubic-bezier(0.2,0,0,1)]"></div>
+                        <button id="lang-en-btn" class="relative z-10 flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all" type="button">English</button>
+                        <button id="lang-ar-btn" class="relative z-10 flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all" type="button">العربية</button>
+                    </div>
+                </div>
+
+                <!-- Storage Section -->
+                <div class="pt-2">
+                    <div class="p-5 rounded-[2rem] bg-surface-container-low/40 border border-outline-variant/10 space-y-6">
+                        <div class="flex items-center justify-between">
+                            <p id="storage-label" class="text-xs font-bold text-on-surface">Storage Location</p>
+                            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"></path></svg>
+                            </div>
+                        </div>
+                        <div class="px-4 py-3 bg-surface-container-lowest border border-outline-variant/5 rounded-xl">
+                            <span id="storage-path-display" class="text-[10px] font-bold text-on-surface-variant/60 break-all leading-relaxed font-label">/path/to/storage</span>
+                        </div>
+                        <button id="change-storage-btn" class="w-full py-4 bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3" type="button">
+                            Change Folder
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex flex-col items-center gap-2 pt-2 pb-2">
+                    <span class="text-[10px] font-black text-on-surface-variant/40 tracking-[0.1em]">Archiva v1.2.7</span>
+                    <a href="#" id="dev-github-link" class="text-[10px] font-bold text-primary/60 hover:text-primary transition-all">By Abdulrahman</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 z-[200] hidden flex items-center justify-center p-4">
+        <div id="confirm-backdrop" class="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+        <div
+            class="relative bg-surface-container-lowest border border-outline-variant/20 rounded-[2.5rem] shadow-2xl p-10 max-w-sm w-full animate-scale-up overflow-hidden">
+            <div class="flex flex-col items-center text-center space-y-8">
+                <div id="confirm-icon-bg"
+                    class="w-16 h-16 bg-error/10 text-error rounded-full flex items-center justify-center transition-all duration-500">
+                    <svg class="icon-svg lg" viewBox="0 0 24 24">
+                        <path id="confirm-icon-path" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+                    </svg>
+                </div>
+                <div class="space-y-3">
+                    <h3 id="confirm-title"
+                        class="text-xl font-headline font-extrabold text-on-surface leading-tight text-balance">Confirm
+                        Action</h3>
+                    <p id="confirm-message" class="text-sm text-on-surface-variant font-medium leading-relaxed">This
+                        action cannot be undone. Are you sure you wish to proceed?</p>
+                </div>
+                <div class="flex gap-4 w-full pt-2">
+                    <button id="confirm-cancel-btn"
+                        class="flex-1 py-4 bg-surface-container-low text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-surface-container-high transition-all active:scale-95"
+                        type="button">Cancel</button>
+                    <button id="confirm-ok-btn"
+                        class="flex-1 py-4 bg-error text-on-error text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-error/20 hover:bg-error/80 transition-all active:scale-95"
+                        type="button">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#2d5383",
+                    "on-surface": "#283439",
+                    "surface-container-low": "#eff4f7",
+                    "surface-container-highest": "#d7e5eb",
+                    "on-tertiary-fixed-variant": "#565873",
+                    "on-tertiary-fixed": "#3a3c55",
+                    "error": "#9f403d",
+                    "surface-container-lowest": "#ffffff",
+                    "on-surface-variant": "#546166",
+                    "outline": "#707d82",
+                    "tertiary-fixed-dim": "#cecfef",
+                    "on-background": "#283439",
+                    "surface-tint": "#3b6090",
+                    "surface-dim": "#ccdde4",
+                    "surface-variant": "#d7e5eb",
+                    "surface-container": "#e7eff3",
+                    "surface-bright": "#f7fafc",
+                    "on-error": "#fff7f6",
+                    "inverse-surface": "#0b0f10",
+                    "tertiary-fixed": "#ddddfe",
+                    "surface": "#f7fafc",
+                    "secondary-fixed": "#d4e4fc",
+                    "background": "#f7fafc",
+                    "on-secondary": "#f7f9ff",
+                    "on-primary-fixed": "#16406f",
+                    "tertiary-container": "#ddddfe",
+                    "inverse-on-surface": "#9a9d9f",
+                    "secondary": "#516075",
+                    "secondary-fixed-dim": "#c6d5ee",
+                    "secondary-dim": "#455468",
+                    "primary-container": "#d4e3ff",
+                    "on-error-container": "#752121",
+                    "secondary-container": "#d4e4fc",
+                    "on-secondary-container": "#445367",
+                    "primary-fixed-dim": "#bdd6ff",
+                    "on-primary-fixed-variant": "#385d8d",
+                    "tertiary": "#5b5d78",
+                    "on-tertiary-container": "#4c4e69",
+                    "on-secondary-fixed": "#324054",
+                    "inverse-primary": "#9fc3fa",
+                    "on-primary": "#f6f7ff",
+                    "on-tertiary": "#fbf8ff",
+                    "surface-container-high": "#dfeaef",
+                    "on-secondary-fixed-variant": "#4e5d71",
+                    "tertiary-dim": "#4f516c",
+                    "primary-dim": "#2e5484",
+                    "error-container": "#fe8983",
+                    "primary-fixed": "#d4e3ff",
+                    "primary": "#3b6090",
+                    "outline-variant": "#a7b4ba",
+                    "error-dim": "#4e0309"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Manrope"],
+                    "body": ["Inter"],
+                    "label": ["Inter"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .editorial-gradient {
+            background: linear-gradient(135deg, #3b6090 0%, #2d5383 100%);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7fafc;
+            color: #283439;
+        }
+        .headline-font {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen">
+<!-- TopNavBar Shell -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-8 py-4 bg-[#ffffff]/80 backdrop-blur-xl no-border font-['Manrope'] antialiased tracking-tight">
+<div class="flex items-center gap-8">
+<span class="text-xl font-bold tracking-tighter text-slate-800">Editorial Intel</span>
+</div>
+<div class="flex items-center gap-2">
+<!-- Trailing Icons -->
+<button class="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors duration-300 ease-[cubic-bezier(0.2,0,0,1)] scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<button class="p-2 rounded-full text-blue-600 font-semibold bg-slate-100 transition-colors duration-300 ease-[cubic-bezier(0.2,0,0,1)] scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="search" style="font-variation-settings: 'FILL' 1;">search</span>
+</button>
+<button class="p-2 rounded-full text-slate-500 hover:bg-slate-100 transition-colors duration-300 ease-[cubic-bezier(0.2,0,0,1)] scale-95 active:scale-90 transition-transform">
+<span class="material-symbols-outlined" data-icon="archive">archive</span>
+</button>
+</div>
+</nav>
+<main class="pt-24 px-8 max-w-7xl mx-auto">
+<!-- Search Focus Area -->
+<div class="mt-12 mb-16 flex flex-col items-center">
+<div class="w-full max-w-3xl relative group">
+<div class="absolute inset-y-0 left-6 flex items-center pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</div>
+<input class="w-full bg-surface-container-highest border-none rounded-xl py-6 pl-16 pr-6 text-xl headline-font font-semibold text-on-surface focus:ring-2 focus:ring-primary/20 bg-surface-container-highest transition-all duration-300 placeholder:text-outline/50" placeholder="Search your library..." type="text" value="ملحقات"/>
+<div class="absolute inset-y-0 right-6 flex items-center gap-3">
+<span class="text-xs font-bold tracking-widest text-on-surface-variant bg-surface-container-low px-2 py-1 rounded border border-outline-variant/10">⌘ K</span>
+<button class="text-primary hover:text-primary-dim transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+</div>
+<div class="mt-4 flex gap-3">
+<span class="text-xs font-bold tracking-widest text-on-surface-variant uppercase">Filter by:</span>
+<button class="text-xs font-semibold px-3 py-1 rounded-full bg-primary-container text-on-primary-container">Attachments</button>
+<button class="text-xs font-semibold px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high transition-colors">Date</button>
+<button class="text-xs font-semibold px-3 py-1 rounded-full bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high transition-colors">Author</button>
+</div>
+</div>
+<!-- Search Results -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+<!-- Insights Rail (Left Side) -->
+<div class="md:col-span-3 space-y-6">
+<h2 class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-4">Quick Insights</h2>
+<div class="bg-surface-container-low p-5 rounded-xl space-y-4">
+<div class="bg-surface-container-lowest p-4 rounded-lg shadow-sm border-none">
+<span class="material-symbols-outlined text-primary text-sm mb-2" data-icon="auto_awesome">auto_awesome</span>
+<p class="text-sm font-medium text-on-surface mb-1">Semantic Clusters</p>
+<p class="text-xs text-on-surface-variant leading-relaxed">Most attachments are related to "Legal Compliance" and "Appendix B".</p>
+</div>
+<div class="bg-surface-container-lowest p-4 rounded-lg shadow-sm border-none">
+<span class="material-symbols-outlined text-secondary text-sm mb-2" data-icon="analytics">analytics</span>
+<p class="text-sm font-medium text-on-surface mb-1">Density Map</p>
+<p class="text-xs text-on-surface-variant leading-relaxed">Search term "ملحقات" appears 42 times across 12 documents.</p>
+</div>
+</div>
+</div>
+<!-- Main Results (Right Side) -->
+<div class="md:col-span-9">
+<div class="flex justify-between items-end mb-8">
+<div>
+<h1 class="text-3xl font-bold headline-font tracking-tight text-on-surface">Search Results</h1>
+<p class="text-on-surface-variant mt-1">Showing 12 results for "ملحقات" in Attachments</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 rounded-lg bg-surface-container-low text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+</button>
+<button class="p-2 rounded-lg bg-surface-container-high text-primary">
+<span class="material-symbols-outlined" data-icon="list">list</span>
+</button>
+</div>
+</div>
+<div class="space-y-4">
+<!-- Result Item 1 -->
+<div class="group bg-surface-container-lowest hover:bg-surface-container-low p-6 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] cursor-pointer flex items-center gap-6">
+<div class="h-16 w-12 bg-surface-variant rounded-md flex-shrink-0 relative overflow-hidden">
+<img class="opacity-40 grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="abstract architectural geometry with clean lines and soft shadows in light blue and grey tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBb3AB4zk_55kjoEEtXopxdoCsLwPApXN8e8Qv4BVdR0R0xowkJ7Vs-t0Tf3sdw6zGSx9gmo3J-NLZKnVVEC0h3e1gpfA_1BQ1hEhohaOiILID-Bai0FVEKMVUpUg3i3s-ODa5V80T9hNaGZOqfMZm-TYGFL8G5PvKDb-9llpwWzW3j8SeWcwiuK5yOfKdKTpAZ64ksmvi7ekBS6Xp8sgtdDRUvWqUXbuEfvgQd06YTh7sHpB2h3cHuOr_-qIKjG0U9yq66RZ0zbWE"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+</div>
+<div class="flex-grow grid grid-cols-3 items-center gap-4">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Name</p>
+<p class="font-semibold text-on-surface truncate">ملحق_الميزانية_السنوية_2023.pdf</p>
+</div>
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Location</p>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="folder_open">folder_open</span>
+                                    Finance / Q4 / Reports
+                                </p>
+</div>
+<div class="flex justify-between items-center">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">ID / Number</p>
+<p class="text-sm font-mono text-primary font-semibold">#ATT-8821-AR</p>
+</div>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Result Item 2 -->
+<div class="group bg-surface-container-lowest hover:bg-surface-container-low p-6 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] cursor-pointer flex items-center gap-6">
+<div class="h-16 w-12 bg-surface-variant rounded-md flex-shrink-0 relative overflow-hidden">
+<img class="opacity-40 grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="minimalist wave patterns with soft gradient from light grey to muted cyan" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAl748HztZNHdgnAk1e17UdW5CMy4ewOui4E52-tNcwpKiwYNWUwQ0e47bZoe9sE5KQLqlxxs2lScMHq6gfjpG2dAkhmF-YVWOUEalvA-0oS7LiazM_Ylc5cUm4El4MVGx0_PtoGgxJsUEEfTGVmzPfxPla2oh_zYoJAYxyQ_yzD63S5pCxKImWomt8PUpc-2jO9sr2tTaTlkzg3pPfp-fNuSRmxDYyDvaOA6VooStxJEBhszrSHxjGvemMUFUidziXVjZeNOG7Fps"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="description">description</span>
+</div>
+</div>
+<div class="flex-grow grid grid-cols-3 items-center gap-4">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Name</p>
+<p class="font-semibold text-on-surface truncate">ملحقات_عقد_التأسيس.pdf</p>
+</div>
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Location</p>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="auto_stories">auto_stories</span>
+                                    Legal Archive / Page 142
+                                </p>
+</div>
+<div class="flex justify-between items-center">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">ID / Number</p>
+<p class="text-sm font-mono text-primary font-semibold">#LGL-0045-EX</p>
+</div>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Result Item 3 -->
+<div class="group bg-surface-container-lowest hover:bg-surface-container-low p-6 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] cursor-pointer flex items-center gap-6">
+<div class="h-16 w-12 bg-surface-variant rounded-md flex-shrink-0 relative overflow-hidden">
+<img class="opacity-40 grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="abstract composition of floating planes and soft light shadows reflecting off matte white surfaces" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbAZB-D4rZ8CFZoHyEAzudIBHXN_ZSLW5inv8wUqJiqJZzYvkTxIbOty_8LuELTzlP3EAh5N2YXRvZ4QWpb5NhDXYuUDPngU2gPTUcD-VYyDp2lkSlOvHuIpOOAWQMUaJZBC1UJfe_ufoYecLKfFmsDyJplcmRuCydduapUvvBwyHiN4HKPlCb1B8XBu5WAI5TaDs_EcQUOALTg-D90WqkUDTU6JthJ2lvajARCOLtRxxPoLPxg9-0WSIH2dp2oSfy0JtIIyGo4yo"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="article">article</span>
+</div>
+</div>
+<div class="flex-grow grid grid-cols-3 items-center gap-4">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Name</p>
+<p class="font-semibold text-on-surface truncate">ملحق_السياسات_والإجراءات.docx</p>
+</div>
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Location</p>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="cloud">cloud</span>
+                                    Cloud Storage / HR / Manuals
+                                </p>
+</div>
+<div class="flex justify-between items-center">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">ID / Number</p>
+<p class="text-sm font-mono text-primary font-semibold">#HR-992-POL</p>
+</div>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Result Item 4 -->
+<div class="group bg-surface-container-lowest hover:bg-surface-container-low p-6 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] cursor-pointer flex items-center gap-6">
+<div class="h-16 w-12 bg-surface-variant rounded-md flex-shrink-0 relative overflow-hidden">
+<img class="opacity-40 grayscale group-hover:grayscale-0 transition-all duration-500" data-alt="gentle flowing blue and white silk textures with elegant movement and soft focus edges" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2yMDmfqoQSpd4mCV_UWibE9YxB9hdel0sFVuifiZAj3qLFrcRYlR6aKNy-7_CVGCTBqYTwolLFddOlvIqtXt_8fKb5BwHay9Erb08tqMEFbYX5i4w0sx5rXkQhNzue-6bGcsVbLO8pCt6m_LGloqatSzvrgMCez88B_IWw5zYeqS4M8mr4XBMscTeQ06yxxBoIivAk86CPwj7Bi6PAtGX6ufEkJntV_FtULBevKQTIxJ0JfUd_AUiuzfbP2cNGUe3uO7Y_idFJGM"/>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="grid_on">grid_on</span>
+</div>
+</div>
+<div class="flex-grow grid grid-cols-3 items-center gap-4">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Name</p>
+<p class="font-semibold text-on-surface truncate">ملحق_الجداول_الإحصائية.xlsx</p>
+</div>
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">Location</p>
+<p class="text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-xs" data-icon="table_chart">table_chart</span>
+                                    Research / Data / 2024
+                                </p>
+</div>
+<div class="flex justify-between items-center">
+<div>
+<p class="text-xs font-bold tracking-widest text-on-surface-variant uppercase mb-1">ID / Number</p>
+<p class="text-sm font-mono text-primary font-semibold">#DAT-4412-ST</p>
+</div>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity text-primary" data-icon="arrow_forward">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Load More / Pagination -->
+<div class="mt-12 flex justify-center">
+<button class="px-8 py-3 rounded-full bg-surface-container-high text-on-surface font-semibold hover:bg-surface-container-highest transition-colors flex items-center gap-2">
+<span>Show more results</span>
+<span class="material-symbols-outlined" data-icon="expand_more">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Tooltip / Insight Prompt -->
+<div class="fixed bottom-8 right-8">
+<button class="editorial-gradient text-white h-14 w-14 rounded-full shadow-xl flex items-center justify-center hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" data-icon="psychology_alt" style="font-variation-settings: 'FILL' 1;">psychology_alt</span>
+</button>
+</div>
+</body></html>

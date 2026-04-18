@@ -1,0 +1,11 @@
+        dark_theme: "Dark",
+        language_label: "Language",
+        delete_selected: "Delete Selected",
+        cancel: "Cancel",
+        confirm_title: "Confirm Action",
+        confirm_btn: "Confirm",
+        import_folder: "Load Archive Folder",
+        import_folder_desc: "Load an existing folder — recognized instantly via JSON memory",
+        importing_msg: "Loading archive memory...",
+        import_success: "Archive folder loaded successfully",
+        import_error: "Failed to load folder"
