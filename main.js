@@ -2,7 +2,17 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, shell, nativeTheme } = requir
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { loadEncryptedEnv } = require('./env-crypto');
+const envPathEnc = path.join(__dirname, '.env.enc');
+const envPathPlain = path.join(__dirname, '.env');
+
+if (!loadEncryptedEnv(envPathEnc)) {
+    // Fallback to plain .env for development
+    if (fs.existsSync(envPathPlain)) {
+        require('dotenv').config({ path: envPathPlain });
+    }
+}
+
 
 // Live Reload for Development (only in dev mode)
 if (!app.isPackaged) {

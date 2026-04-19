@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder -w"
+    "dist": "electron-builder -w",
+    "encrypt-env": "node scripts/encrypt-env.js"
   },
   "build": {
     "appId": "com.archiva.app",
@@ -38,10 +39,11 @@
     "files": [
       "src/**/*",
       "main.js",
+      "env-crypto.js",
       "logo/**/*",
       "package.json",
       "node_modules/**/*",
-      ".env"
+      ".env.enc"
     ],
     "extraResources": [
       {
