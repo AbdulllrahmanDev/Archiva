@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
     selectFiles: () => ipcRenderer.invoke('select-files'),
     processUploads: (files, forceAi) => ipcRenderer.invoke('process-uploads', files, forceAi),
     openPath: (path) => ipcRenderer.invoke('open-path', path),
+    showItemInFolder: (path) => ipcRenderer.invoke('show-item-in-folder', path),
     exportFile: (sourcePath, defaultName) => ipcRenderer.invoke('export-file', sourcePath, defaultName),
     sendChat: (messages) => ipcRenderer.invoke('ai-chat', messages),
     deleteDocument: (id, filePath) => ipcRenderer.invoke('delete-document', id, filePath),

@@ -392,6 +392,17 @@ ipcMain.handle('open-path', async (event, pathOrUrl) => {
     }
 });
 
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+    if (!filePath || !fs.existsSync(filePath)) return { success: false };
+    try {
+        shell.showItemInFolder(filePath);
+        return { success: true };
+    } catch (err) {
+        console.error('Show in folder error:', err);
+        return { success: false };
+    }
+});
+
 ipcMain.handle('export-file', async (event, sourcePath, defaultName) => {
     const result = await dialog.showSaveDialog(mainWindow, {
         title: 'Export Document',

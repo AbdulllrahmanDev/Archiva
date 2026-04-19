@@ -39,17 +39,36 @@ const SVG_ICONS = {
     add_comment: 'M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm0 14H4V4h16v12zm-2-7h-5v5h-2V9H6V7h5V2h2v5h5v2z',
     edit_note: 'M3 10h11v2H3v-2zm0-2h11V6H3v2zm0 8h7v-2H3v2zm15.01-3.13l.71-.71c.39-.39 1.02-.39 1.41 0l.71.71c.39.39.39 1.02 0 1.41l-.71.71-2.12-2.12zm-.71.71L12 18.25V21h2.75l5.3-5.3-2.75-2.75z',
     edit_square: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
-    edit_note: 'M3 10h11v2H3v-2zm0-2h11V6H3v2zm0 8h7v-2H3v2zm15.01-3.13l.71-.71c.39-.39 1.02-.39 1.41 0l.71.71c.39.39.39 1.02 0 1.41l-.71.71-2.12-2.12zm-.71.71L12 18.25V21h2.75l5.3-5.3-2.75-2.75z',
     delete: 'M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1z',
     history: 'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
     settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
     light_mode: 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.42 0s.39-1.03 0-1.42L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.42 0s.39-1.03 0-1.42l-1.06-1.06zm1.06-12.37a.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.42s1.03.39 1.42 0l1.06-1.06c.39-.39.39-1.03 0-1.42zm-12.37 12.37a.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.42s1.03.39 1.42 0l1.06-1.06c.39-.39.39-1.03 0-1.42z',
-    dark_mode: 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z'
+    dark_mode: 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z',
+    content_copy: 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z',
+    check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
 };
 
 function getIcon(name, classes = "") {
     const path = SVG_ICONS[name] || SVG_ICONS['description'];
     return `<svg class="icon-svg ${classes}" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+}
+
+function copyToClipboard(text, btnElement) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalHTML = btnElement.innerHTML;
+        
+        btnElement.classList.add('text-on-surface');
+        btnElement.classList.remove('text-primary/40', 'hover:text-primary');
+        btnElement.innerHTML = getIcon('check', 'xs');
+        
+        setTimeout(() => {
+            btnElement.classList.remove('text-on-surface');
+            btnElement.classList.add('text-primary/40', 'hover:text-primary');
+            btnElement.innerHTML = originalHTML;
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
 }
 
 const i18n = {
@@ -61,7 +80,7 @@ const i18n = {
         intel_library: "Intelligence Library", archive: "Library", list: "List", grid: "Curator Grid",
         insights_dashboard: "Insights Dashboard", global_assets: "Global Assets", status: "Status", live_engine: "Live Engine",
         back_to_insights: "Back to Insights", back_to_search: "Back to Search",
-        intel_summary: "Intelligence Summary", open_file: "Open File", export: "Export",
+        intel_summary: "Intelligence Summary", open_file: "Open File", open_folder: "Open Folder", export: "Export",
         recent_files: "Recent Files",
         last_analyzed: "Last Analyzed", action_control: "Action Control",
         search_placeholder: "Search library...", doc_class: "Document Class", region_area: "Region / Area",
@@ -116,7 +135,10 @@ const i18n = {
         auto_analysis_off: "Inactive — files not being analyzed",
         auto_analysis_enabled_toast: "Auto-Analysis enabled. Monitoring new files.",
         auto_analysis_disabled_toast: "Auto-Analysis disabled.",
-        activated_since: "Active since:"
+        activated_since: "Active since:",
+        file_path: "File Path",
+        copied: "Copied!",
+        copy_path: "Copy Path"
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -126,7 +148,7 @@ const i18n = {
         intel_library: "أرشيف المحتوى", archive: "الأرشيف", list: "قائمة", grid: "شبكة",
         insights_dashboard: "لوحة التفاصيل", global_assets: "إجمالي الملفات", status: "الحالة", live_engine: "محرك مباشر",
         back_to_insights: "العودة للتفاصيل", back_to_search: "العودة للبحث",
-        intel_summary: "ملخص المحتوى", open_file: "فتح الملف", export: "تصدير",
+        intel_summary: "ملخص المحتوى", open_file: "فتح الملف", open_folder: "فتح المجلد", export: "تصدير",
         recent_files: "أحدث الملفات",
         last_analyzed: "آخر تحليل", action_control: "التحكم",
         search_placeholder: "ابحث في الأرشيف...", doc_class: "تصنيف المستند", region_area: "المنطقة",
@@ -181,7 +203,10 @@ const i18n = {
         auto_analysis_off: "متوقف — لن يتم تحليل الملفات",
         auto_analysis_enabled_toast: "تم تفعيل التحليل التلقائي. يراقب الملفات الجديدة الآن.",
         auto_analysis_disabled_toast: "تم إيقاف التحليل التلقائي.",
-        activated_since: "نشط منذ:"
+        activated_since: "نشط منذ:",
+        file_path: "مسار الملف",
+        copied: "تم النسخ!",
+        copy_path: "نسخ المسار"
     }
 };
 
@@ -1664,7 +1689,7 @@ function selectDocument(id, isSoftUpdate = false) {
                         <span class="text-[8px] text-on-surface-variant/30 font-bold">${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}</span>
                     </div>
 
-                    <!-- الموضوع -->
+                                    <!-- الموضوع -->
                     <div id="field-subject-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'subject', \`${(doc.subject || '').replace(/`/g, "'")}\`, '${currentLang === 'ar' ? 'الموضوع' : 'Subject'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
                         <div class="flex items-center justify-between gap-3 mb-1">
                             <div class="flex items-center gap-2">
@@ -1707,6 +1732,25 @@ function selectDocument(id, isSoftUpdate = false) {
                             <p class="field-value text-xs font-bold text-primary truncate group-hover/field:whitespace-normal">${doc.version_no || '—'}</p>
                         </div>
                     </div>
+
+                    <!-- مسار الملف (File Path) -->
+                    <div class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 group/field">
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="flex items-center gap-2">
+                                <div class="text-primary/40 group-hover/field:text-primary transition-colors">${getIcon('folder', 'xs')}</div>
+                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40">${t('file_path')}</span>
+                            </div>
+                            <button class="w-8 h-8 flex items-center justify-center text-primary/40 hover:text-primary hover:bg-primary/5 rounded-lg transition-all" onclick="copyToClipboard('${doc.file_path.replace(/\\/g, '\\\\')}', this)" title="${t('copy_path')}">
+                                ${getIcon('content_copy', 'xs')}
+                            </button>
+                        </div>
+                        <p class="text-[10px] font-bold text-on-surface-variant/40 break-all leading-relaxed pl-7 transition-opacity">${doc.file_path}</p>
+                    </div>
+                    
+                    <!-- زر فتح المجلد الخارجي (Open Folder Full Width Button) -->
+                    <button class="w-full py-3 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md shadow-primary/20 hover:bg-primary-dim active:scale-95 transition-all flex items-center justify-center gap-2" onclick="window.api.showItemInFolder('${doc.file_path.replace(/\\/g, '\\\\')}')">
+                        <span>${t('open_folder')}</span>
+                    </button>
                 </div>
                 ` : ''}
             </div>
