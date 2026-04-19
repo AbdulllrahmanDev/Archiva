@@ -339,7 +339,7 @@ const getViews = () => ({
         </div>
     `,
     archive: `
-        <div class="px-8 fluid-container max-w-7xl mx-auto animate-fade-in pb-20 pt-12">
+        <div class="w-full max-w-full px-4 md:px-8 mx-auto animate-fade-in pb-20 pt-12">
             <!-- Centered Header Section - Lowered for breathing room -->
             <div class="mb-16 flex flex-col items-center justify-center text-center">
                 <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-on-surface mb-8">${t('archived_title')}</h1>
@@ -367,7 +367,7 @@ const getViews = () => ({
             </div>
 
             <div class="grid grid-cols-12 gap-8">
-                <div class="col-span-12 lg:col-span-3 space-y-6 lg:sticky lg:top-8 lg:self-start">
+                <div class="col-span-12 lg:col-span-4 2xl:col-span-3 space-y-6 lg:sticky lg:top-8 lg:self-start">
                     <!-- View Switcher Tabs - Relocated to Sidebar -->
                     <div class="bg-surface-container-low p-1.5 rounded-2xl flex items-center gap-1">
                         <button id="toggle-list-view" class="view-switcher-btn flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-black uppercase tracking-widest transition-all" type="button">${getIcon('list', 'sm')}${t('list')}</button>
@@ -405,7 +405,7 @@ const getViews = () => ({
                         </div>
                     </div>
                 </div>
-                <div class="col-span-12 lg:col-span-9">
+                <div class="col-span-12 lg:col-span-8 2xl:col-span-9">
                     <div id="archive-render-target" class="w-full h-full min-h-[400px]"></div>
                 </div>
             </div>
