@@ -17,7 +17,8 @@ if (!loadEncryptedEnv(envPathEnc)) {
 // Live Reload for Development (only in dev mode)
 if (!app.isPackaged) {
     require('electron-reload')(__dirname, {
-        electron: path.join(__dirname, 'node_modules', '.bin', 'electron')
+        electron: path.join(__dirname, 'node_modules', '.bin', 'electron'),
+        ignored: /.*\.json|.*\.sqlite3|.*\.db|.*[/\\]archive[/\\]/ // Ignore database and sidecar updates
     });
 }
 
@@ -453,14 +454,7 @@ ipcMain.handle('update-document', async (event, id, fields) => {
 
 ipcMain.handle('reprocess-document', async (event, id, filePath) => {
     return new Promise((resolve) => {
-        // 1. Delete the sidecar JSON file if it exists
-        const sidecarPath = filePath + '.json';
-        if (fs.existsSync(sidecarPath)) {
-            try { fs.unlinkSync(sidecarPath); }
-            catch (e) { console.error("Reprocess: Failed to delete sidecar:", e); }
-        }
-
-        // 2. Reset the status in DB to trigger UI spinner
+        // 1. Reset the status in DB to trigger UI spinner
         db.run('UPDATE documents SET status = ? WHERE id = ?', ['processing', id], (err) => {
             if (err) {
                 console.error('Reprocess doc error:', err);
@@ -469,7 +463,7 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                 sendUpdateToRenderer();
                 resolve({ success: true });
 
-                // 3. Immediately spawn processor.py on this file
+                // 2. Immediately spawn processor.py on this file with explicit ID
                 const { spawn } = require('child_process');
                 let executable = 'python';
                 if (process.platform === 'win32') {
@@ -478,7 +472,8 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                 }
                 
                 const scriptPath = path.join(__dirname, 'backend', 'processor.py');
-                const pyProcess = spawn(executable, [scriptPath, filePath, watchFolder], {
+                // Pass --id to ensure consistency even if renamed
+                const pyProcess = spawn(executable, [scriptPath, filePath, watchFolder, '--id', id], {
                     env: {
                         ...process.env,
                         PYTHONIOENCODING: 'utf-8',

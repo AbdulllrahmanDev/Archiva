@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+﻿import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
 import os
@@ -77,9 +77,9 @@ def get_file_hash(file_path):
     return hash_sha256.hexdigest()
 
 
-def extract_text_from_pdf(file_path):
+def extract_text_from_pdf(file_path, doc_id=None):
     text = ""
-    report_status("status_extracting", 20)
+    report_status("status_extracting", 20, doc_id=doc_id)
     try:
         doc = fitz.open(file_path)
         for page in doc:
@@ -90,7 +90,7 @@ def extract_text_from_pdf(file_path):
 
     # If text is too short, try OCR
     if len(text.strip()) < 50:
-        report_status("status_ocr", 50)
+        report_status("status_ocr", 50, doc_id=doc_id)
         try:
             doc = fitz.open(file_path)
             for i in range(min(len(doc), 5)):  # OCR first 5 pages max for speed
@@ -105,8 +105,8 @@ def extract_text_from_pdf(file_path):
     return text
 
 
-def extract_text_from_image(file_path):
-    report_status("status_ocr", 40)
+def extract_text_from_image(file_path, doc_id=None):
+    report_status("status_ocr", 40, doc_id=doc_id)
     try:
         img = Image.open(file_path)
         text = pytesseract.image_to_string(img, lang="ara+eng")
@@ -433,7 +433,7 @@ def organize_file_copy(doc_data, base_archive_path):
         # تنظيف الموضوع ليكون صالحاً كاسم ملف
         clean_subject = sanitize_folder_name(subject_raw)
 
-        # الاحتفاظ بالامتد�ير_محدد"
+        # الاحتفاظ بالامتد�ير_محدد"
         project = sanitize_folder_name(project_raw)
 
         # بناء المسار: السنة / المشروع
@@ -480,7 +480,7 @@ def organize_file_copy(doc_data, base_archive_path):
     return None
 
 
-def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False):
+def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None):
     """
     1. Extracts text via OCR or basic text extraction
     2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
@@ -496,6 +496,15 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False)
 
     # 1. Check for local hidden sidecar JSON first (Fast Skip)
     sidecar_path = os.path.splitext(file_path)[0] + ".json"
+    
+    # Try to recover doc_id from sidecar if not provided
+    if not doc_id and os.path.exists(sidecar_path):
+        try:
+            with open(sidecar_path, 'r', encoding='utf-8') as f:
+                temp_data = json.load(f)
+                doc_id = temp_data.get('id')
+        except: pass
+
     if not force_reprocess and os.path.exists(sidecar_path):
         print(
             f"Smart Skip: Sidecar already exists next to file: {file_name}", flush=True
@@ -516,17 +525,21 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False)
 
     print(f"Processing: {file_path}", flush=True)
 
-    # Unified ID generation using NFC normalization to match Electron
-    normalized_name = unicodedata.normalize("NFC", file_name)
-    file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+    # 3. ID Resolution
+    if not doc_id:
+        # Unified ID generation using NFC normalization to match Electron
+        normalized_name = unicodedata.normalize("NFC", file_name)
+        file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+    else:
+        file_id = doc_id
 
     report_status("status_processing", 10, doc_id=file_id, extra={"file": file_name})
 
     try:
         if ext == ".pdf":
-            content = extract_text_from_pdf(file_path)
+            content = extract_text_from_pdf(file_path, doc_id=file_id)
         else:
-            content = extract_text_from_image(file_path)
+            content = extract_text_from_image(file_path, doc_id=file_id)
 
         content = content or ""  # Ensure it's not None
 
@@ -619,10 +632,20 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         file_path_arg = sys.argv[1]
         output_folder_arg = sys.argv[2]
+        
+        # Handle optional --id argument
+        passed_id = None
+        if "--id" in sys.argv:
+            try:
+                id_idx = sys.argv.index("--id")
+                if len(sys.argv) > id_idx + 1:
+                    passed_id = sys.argv[id_idx + 1]
+            except: pass
+
         from db_manager import set_db_path
         set_db_path(output_folder_arg)
         try:
-            # Force AI explicitly since this is a manual CLI invocation (like Re-analyze)
-            process_file(file_path_arg, output_folder_arg, skip_ai=False, force_reprocess=True)
+            # Force AI explicitly since this is a manual CLI invocation
+            process_file(file_path_arg, output_folder_arg, skip_ai=False, force_reprocess=True, doc_id=passed_id)
         except Exception as e:
             print(f"CLI Processing error: {e}", flush=True)

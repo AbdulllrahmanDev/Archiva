@@ -10,7 +10,7 @@ const progressContainer = document.getElementById('progress-container');
 let documents = [];
 let pendingFiles = [];
 let forceAiForNextUpload = false;
-let currentView = 'add';
+let currentView = localStorage.getItem('archiva-last-view') || 'add';
 let archiveLayout = 'grid';
 let isSelectionMode = false;
 let activeFilters = { type: [], class: [], area: [], year: [], project: [], recency: false };
@@ -124,8 +124,8 @@ const i18n = {
         ready_analysis: "جاهز للتحليل", staged_archival: "مدرج للأرشفة",
         confirm_archival: "تأكيد الأرشفة", clear_list: "مسح القائمة", remove: "حذف",
         intel_library: "أرشيف المحتوى", archive: "الأرشيف", list: "قائمة", grid: "شبكة",
-        insights_dashboard: "لوحة الرؤى", global_assets: "إجمالي الملفات", status: "الحالة", live_engine: "محرك مباشر",
-        back_to_insights: "العودة للرؤى", back_to_search: "العودة للبحث",
+        insights_dashboard: "لوحة التفاصيل", global_assets: "إجمالي الملفات", status: "الحالة", live_engine: "محرك مباشر",
+        back_to_insights: "العودة للتفاصيل", back_to_search: "العودة للبحث",
         intel_summary: "ملخص المحتوى", open_file: "فتح الملف", export: "تصدير",
         recent_files: "أحدث الملفات",
         last_analyzed: "آخر تحليل", action_control: "التحكم",
@@ -161,10 +161,10 @@ const i18n = {
         storage_updated: "تم تحديث موقع التخزين",
         status_extracting: "جاري استخراج محتوى المستند...",
         status_ocr: "جاري إجراء الفحص الضوئي للمستند...",
-        status_ai: "المحرك الذكي يقوم بتحليل السياق...",
+        status_ai: "الذكاء الاصطناعي يقوم بتحليل السياق...",
         status_organizing: "جاري تنظيم هيكل الأرشيف...",
         status_saving: "جاري اللمسات الأخيرة للأرشفة...",
-        status_idle: "النظام مستعد",
+        status_idle: "تم الانتهاء من المعالجة",
         status_processing: "جاري معالجة: {file}",
         status_error: "فشل التحليل. تم استخدام بيانات افتراضية.",
         status_fail: "حدث خطأ في النظام أثناء المعالجة.",
@@ -860,6 +860,11 @@ function scrollToChatBottom() {
 
 function switchView(viewName) {
     if (!viewport) return;
+    
+    // Persist view state
+    localStorage.setItem('archiva-last-view', viewName);
+    
+    const isNewView = (currentView !== viewName);
     currentView = viewName;
 
     const isFirstInit = !viewsInitialized;
@@ -869,6 +874,7 @@ function switchView(viewName) {
             <div id="view-add" class="view-container hidden">${views.add}</div>
             <div id="view-archive" class="view-container hidden">${views.archive}</div>
             <div id="view-ai" class="view-container hidden">${views.ai}</div>
+            <div id="view-settings" class="view-container hidden">${views.settings}</div>
         `;
         viewsInitialized = true;
 
@@ -975,15 +981,30 @@ function switchView(viewName) {
         }
     }
 
-    ['add', 'archive', 'ai'].forEach(v => {
-        const el = document.getElementById(`view-${v}`);
+    const viewAdd = document.getElementById('view-add');
+    const viewArchive = document.getElementById('view-archive');
+    const viewAi = document.getElementById('view-ai');
+    const viewSettings = document.getElementById('view-settings');
+
+    const viewElements = {
+        'add': viewAdd,
+        'archive': viewArchive,
+        'ai': viewAi,
+        'settings': viewSettings
+    };
+
+    // Hide all, then show active
+    Object.keys(viewElements).forEach(view => {
+        const el = viewElements[view];
         if (el) {
-            if (v === viewName) {
+            if (view === viewName) {
                 el.classList.remove('hidden');
-                // Removed animate-fade-in from inside html mostly, so we add it here to replay it
-                el.classList.remove('animate-fade-in');
-                void el.offsetWidth;
-                el.classList.add('animate-fade-in');
+                // Only trigger fade-in animation if it's actually a DIFFERENT view
+                if (isNewView || isFirstInit) {
+                    el.classList.remove('animate-fade-in');
+                    void el.offsetWidth; // Trigger reflow
+                    el.classList.add('animate-fade-in');
+                }
             } else {
                 el.classList.add('hidden');
             }
@@ -1606,15 +1627,17 @@ function renderPendingList() {
 
 // --- AI / Analytics Logic Removed as standalone search is merged ---
 
-function selectDocument(id) {
+function selectDocument(id, isSoftUpdate = false) {
     activeDocId = id; // Update active tracker
     const doc = documents.find(d => d.id == id);
     if (!doc) return;
 
     const isProcessing = doc.status === 'processing';
 
+    const animationClass = isSoftUpdate ? 'content-update-fade' : 'animate-fade-in';
+
     const detailHTML = `
-        <div class="space-y-6 animate-fade-in pb-12">
+        <div class="space-y-6 ${animationClass} pb-12">
             <!-- Premium Metadata Header -->
             <div class="space-y-4">
                 <div class="flex items-center gap-3">
@@ -1769,7 +1792,7 @@ function selectDocument(id) {
                 
                 // Switch local UI instantly while waiting for backend
                 doc.status = 'processing';
-                selectDocument(doc.id);
+                selectDocument(doc.id, true); // use soft update
             };
         }
 
@@ -1947,9 +1970,9 @@ if (window.api) {
             const activeDoc = documents.find(d => d.id == activeDocId);
             const prevDoc = prevDocs.find(d => d.id == activeDocId);
             if (activeDoc && prevDoc && prevDoc.status === 'processing' && activeDoc.status !== 'processing') {
-                selectDocument(activeDocId);
+                selectDocument(activeDocId, true); // soft update on finish
             } else if (activeDoc && !prevDoc) {
-                selectDocument(activeDocId);
+                selectDocument(activeDocId, true);
             }
         }
     });
