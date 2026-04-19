@@ -18,7 +18,15 @@ if (!loadEncryptedEnv(envPathEnc)) {
 if (!app.isPackaged) {
     require('electron-reload')(__dirname, {
         electron: path.join(__dirname, 'node_modules', '.bin', 'electron'),
-        ignored: /.*\.json|.*\.sqlite3|.*\.db|.*[/\\]archive[/\\]/ // Ignore database and sidecar updates
+        ignored: [
+            /node_modules|[/\\]\./, 
+            /.*\.json/, 
+            /.*\.sqlite3/, 
+            /.*\.db/, 
+            /.*[/\\]archive[/\\]/, 
+            /.*[/\\]MAIN Archiva[/\\]/
+        ],
+        hardResetMethod: 'exit'
     });
 }
 

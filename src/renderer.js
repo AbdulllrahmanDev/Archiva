@@ -327,7 +327,7 @@ const getViews = () => ({
                     <input id="global-search-input" class="w-full bg-surface-container-lowest border border-outline-variant/10 rounded-2xl py-6 ps-20 pe-28 text-xl font-headline font-semibold text-on-surface focus:ring-2 focus:ring-primary-container transition-all placeholder:text-outline/40 shadow-sm outline-none" placeholder="${t('search_placeholder')}" type="text"/>
                     <div class="absolute inset-y-0 end-6 flex items-center gap-2">
                         <button id="toggle-recency-filter" class="p-2 rounded-xl bg-surface-container-low transition-all flex items-center text-on-surface-variant pointer-events-auto" title="${t('recent_files')}">${getIcon('history', 'sm')}</button>
-                        <button id="toggle-filter-menu" class="p-2 rounded-xl bg-surface-container-low hover:bg-primary/20 transition-all">${getIcon('tune')}<div id="filter-indicator" class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full hidden"></div></button>
+                        <button id="toggle-filter-menu" class="relative p-2 rounded-xl bg-surface-container-low hover:bg-primary/20 transition-all">${getIcon('tune')}<div id="filter-indicator" class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full hidden"></div></button>
                     </div>
                     
                     <div id="filter-menu" class="filter-menu-flyout">
