@@ -375,29 +375,33 @@ const getViews = () => ({
                     </div>
 
                     <div id="archive-sidebar-content" class="h-full">
-                        <div id="global-insights" class="p-8 bg-surface-container-low rounded-[2rem] border border-outline-variant/5 relative group/sidebar">
-                            <div class="flex items-center justify-between mb-8">
-                                <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/50 font-label text-right rtl:text-left">${t('insights_dashboard')}</h3>
-                                <button id="clear-archive-btn" class="p-2 text-on-surface-variant/20 hover:text-error transition-all opacity-0 group-hover/sidebar:opacity-100" title="Clear Archive">
-                                    ${getIcon('delete', 'sm')}
-                                </button>
-                            </div>
-                            <div id="selection-controls" class="hidden flex flex-col gap-3 mb-8 animate-fade-in border-b border-outline-variant/5 pb-8">
-                                <button id="batch-delete-btn" class="w-full py-4 bg-error text-on-error text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-error/20 hover:bg-error/80 transition-all flex items-center justify-center gap-2" type="button">
-                                    ${getIcon('delete', 'sm')} ${t('delete_selected')}
-                                </button>
-                                <button id="batch-cancel-btn" class="w-full py-3 bg-surface-container-highest text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-high transition-all" type="button">
-                                    ${t('cancel')}
-                                </button>
-                            </div>
-                            <div class="space-y-8">
-                                <div id="results-count-container" class="space-y-1">
-                                    <p class="text-sm font-medium text-on-surface-variant">${t('global_assets')}</p>
-                                    <p id="total-assets" class="text-4xl font-black text-primary">0</p>
+                        <div id="global-insights" class="bg-surface-container-low rounded-[2rem] border border-outline-variant/5 relative group/sidebar overflow-hidden" style="-webkit-mask-image: -webkit-radial-gradient(white, black);">
+                            <div class="max-h-[85vh] overflow-y-auto custom-scrollbar" style="direction: ltr;">
+                                <div style="direction: ${currentLang === 'ar' ? 'rtl' : 'ltr'};" class="p-8 min-h-full">
+                                    <div class="flex items-center justify-between mb-8">
+                                        <h3 class="text-[10px] font-black uppercase tracking-[0.2em] text-on-surface-variant/50 font-label text-right rtl:text-left">${t('insights_dashboard')}</h3>
+                                        <button id="clear-archive-btn" class="p-2 text-on-surface-variant/20 hover:text-error transition-all opacity-0 group-hover/sidebar:opacity-100" title="Clear Archive">
+                                            ${getIcon('delete', 'sm')}
+                                        </button>
+                                    </div>
+                                    <div id="selection-controls" class="hidden flex flex-col gap-3 mb-8 animate-fade-in border-b border-outline-variant/5 pb-8">
+                                        <button id="batch-delete-btn" class="w-full py-4 bg-error text-on-error text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-error/20 hover:bg-error/80 transition-all flex items-center justify-center gap-2" type="button">
+                                            ${getIcon('delete', 'sm')} ${t('delete_selected')}
+                                        </button>
+                                        <button id="batch-cancel-btn" class="w-full py-3 bg-surface-container-highest text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-high transition-all" type="button">
+                                            ${t('cancel')}
+                                        </button>
+                                    </div>
+                                    <div class="space-y-8">
+                                        <div id="results-count-container" class="space-y-1">
+                                            <p class="text-sm font-medium text-on-surface-variant">${t('global_assets')}</p>
+                                            <p id="total-assets" class="text-4xl font-black text-primary">0</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <div id="document-intelligence" class="hidden bg-surface-container-low rounded-[2rem] border border-outline-variant/5 overflow-hidden">
+                        <div id="document-intelligence" class="hidden bg-surface-container-low rounded-[2rem] border border-outline-variant/5 overflow-hidden" style="-webkit-mask-image: -webkit-radial-gradient(white, black);">
                             <div class="max-h-[85vh] overflow-y-auto custom-scrollbar" style="direction: ltr;">
                                 <div style="direction: ${currentLang === 'ar' ? 'rtl' : 'ltr'};" class="p-8 min-h-full">
                                     <button id="back-to-insights" class="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest mb-6 transition-transform">
