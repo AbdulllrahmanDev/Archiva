@@ -29,6 +29,36 @@ let mainWindow;
 let pythonProcess;
 let watchFolder;
 let db;
+let autoAnalysisEnabled = true;
+let autoAnalysisActivatedAt = null;
+
+function loadAutoAnalysisConfig() {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try {
+            config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        } catch (e) {
+            console.error('Error reading auto-analysis config:', e);
+        }
+    }
+
+    // Default: auto-analysis enabled
+    autoAnalysisEnabled = config.autoAnalysisEnabled !== false;
+
+    // If enabled but no activation timestamp yet, set one now (first-time bootstrap)
+    if (autoAnalysisEnabled && !config.autoAnalysisActivatedAt) {
+        config.autoAnalysisActivatedAt = new Date().toISOString();
+        try {
+            fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        } catch(e) {
+            console.error('Could not save initial activatedAt timestamp:', e);
+        }
+    }
+
+    autoAnalysisActivatedAt = config.autoAnalysisActivatedAt || null;
+    console.log(`Auto-Analysis: ${autoAnalysisEnabled ? 'ENABLED' : 'DISABLED'}, ActivatedAt: ${autoAnalysisActivatedAt || 'N/A'}`);
+}
 
 function initStorage() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
@@ -159,7 +189,10 @@ function startBackend() {
             PYTHONIOENCODING: 'utf-8',
             PYTHONUTF8: '1',
             OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
+            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001',
+            AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
+            AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
+            ARCHIVA_WATCH_FOLDER: watchFolder
         }
     });
 
@@ -222,9 +255,13 @@ function sendUpdateToRenderer() {
 }
 
 app.whenReady().then(() => {
+    loadAutoAnalysisConfig();
     initStorage();
+    // Write sentinel files so the watcher starts with correct auto-analysis state
+    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt);
     createWindow();
     startBackend();
+
 
     ipcMain.on('web-ready', () => {
         console.log("Renderer ready signal received.");
@@ -281,8 +318,8 @@ ipcMain.handle('select-files', async () => {
     }));
 });
 
-ipcMain.handle('process-uploads', async (event, files) => {
-    console.log(`Processing ${files.length} uploads...`);
+ipcMain.handle('process-uploads', async (event, files, forceAi) => {
+    console.log(`Processing ${files.length} uploads... (forceAi: ${forceAi})`);
     const dateStr = new Date().toISOString().split('T')[0];
 
     const tasks = files.map(file => {
@@ -298,6 +335,13 @@ ipcMain.handle('process-uploads', async (event, files) => {
                 const ext = path.extname(file.name).toLowerCase();
                 const type = ext === '.pdf' ? 'PDF' : 'IMAGE';
                 
+                // If forceAi is true, write the sentinel file for this specific fileId
+                if (forceAi) {
+                    const sentinelDir = path.join(watchFolder, '.archiva');
+                    if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
+                    fs.writeFileSync(path.join(sentinelDir, `force_ai_${fileId}.tmp`), '1', 'utf8');
+                }
+
                 db.run(`INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing'], 
                     (err) => {
@@ -416,7 +460,7 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
             catch (e) { console.error("Reprocess: Failed to delete sidecar:", e); }
         }
 
-        // 2. Reset the status in DB to trigger background processor
+        // 2. Reset the status in DB to trigger UI spinner
         db.run('UPDATE documents SET status = ? WHERE id = ?', ['processing', id], (err) => {
             if (err) {
                 console.error('Reprocess doc error:', err);
@@ -424,6 +468,41 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
             } else {
                 sendUpdateToRenderer();
                 resolve({ success: true });
+
+                // 3. Immediately spawn processor.py on this file
+                const { spawn } = require('child_process');
+                let executable = 'python';
+                if (process.platform === 'win32') {
+                    const venvPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+                    if (fs.existsSync(venvPath)) executable = venvPath;
+                }
+                
+                const scriptPath = path.join(__dirname, 'backend', 'processor.py');
+                const pyProcess = spawn(executable, [scriptPath, filePath, watchFolder], {
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUTF8: '1',
+                        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
+                    }
+                });
+
+                pyProcess.stdout.on('data', (d) => {
+                    const lines = d.toString().split('\n');
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if (!trimmed) return;
+                        if (trimmed.startsWith('{')) {
+                            try {
+                                const json = JSON.parse(trimmed);
+                                if (json.type === 'sync_complete') sendUpdateToRenderer();
+                                else if (json.type === 'document_added') sendUpdateToRenderer();
+                                else mainWindow.webContents.send('status-update', json);
+                            } catch(e) {}
+                        }
+                    });
+                });
             }
         });
     });
@@ -688,3 +767,83 @@ ipcMain.handle('import-folder', async (event, folderPath) => {
     });
 });
 
+// ============================================================
+// AUTO-ANALYSIS TOGGLE
+// ============================================================
+
+ipcMain.handle('get-auto-analysis-status', async () => {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    if (fs.existsSync(configPath)) {
+        try {
+            const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            return {
+                enabled: config.autoAnalysisEnabled !== false,
+                activatedAt: config.autoAnalysisActivatedAt || null
+            };
+        } catch (e) {
+            console.error('Error reading auto-analysis status:', e);
+        }
+    }
+    return { enabled: true, activatedAt: null };
+});
+
+ipcMain.handle('toggle-auto-analysis', async (event, enabled) => {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+    }
+
+    config.autoAnalysisEnabled = enabled;
+    if (enabled) {
+        config.autoAnalysisActivatedAt = new Date().toISOString();
+    } else {
+        config.autoAnalysisActivatedAt = null;
+    }
+
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (e) {
+        console.error('Error saving auto-analysis config:', e);
+        return { success: false, error: e.message };
+    }
+
+    // Update in-memory state
+    autoAnalysisEnabled = enabled;
+    autoAnalysisActivatedAt = config.autoAnalysisActivatedAt;
+
+    // Write sentinel files so watcher.py picks up the change WITHOUT a restart
+    writeSentinelFiles(enabled, config.autoAnalysisActivatedAt);
+
+    console.log(`Auto-Analysis toggled: ${enabled ? 'ENABLED' : 'DISABLED'} at ${autoAnalysisActivatedAt || 'N/A'}`);
+    return { success: true, enabled, activatedAt: config.autoAnalysisActivatedAt };
+});
+
+/**
+ * Write control sentinel files into the watch folder.
+ * watcher.py polls these files to know the current auto-analysis state.
+ * No backend restart needed — state change takes effect within ~2 seconds.
+ */
+function writeSentinelFiles(enabled, activatedAt) {
+    if (!watchFolder || !fs.existsSync(watchFolder)) return;
+
+    const sentinelDir  = path.join(watchFolder, '.archiva');
+    const enabledFile  = path.join(sentinelDir, 'auto_analysis_enabled');
+    const tsFile       = path.join(sentinelDir, 'activation_timestamp');
+
+    try {
+        if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
+
+        if (enabled) {
+            fs.writeFileSync(enabledFile, '1', 'utf8');
+            fs.writeFileSync(tsFile, activatedAt || '', 'utf8');
+        } else {
+            fs.writeFileSync(enabledFile, '0', 'utf8');
+            // Keep the timestamp file gone so next enable gets fresh ts
+            if (fs.existsSync(tsFile)) fs.unlinkSync(tsFile);
+        }
+        console.log(`Sentinel files updated: enabled=${enabled}, ts=${activatedAt || 'N/A'}`);
+    } catch (e) {
+        console.error('Error writing sentinel files:', e);
+    }
+}

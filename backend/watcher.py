@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import unicodedata
+import hashlib
 
 # Force UTF-8 FIRST before any other imports that print
 if sys.platform == "win32":
@@ -21,6 +22,56 @@ _processing_lock = set()
 _recently_seen   = {}   # path -> timestamp
 _COOLDOWN_SECS   = 30
 
+# ============================================================
+# AUTO-ANALYSIS CONFIGURATION  (Sentinel File System)
+# ============================================================
+# The state is controlled by sentinel files written by main.js.
+# This allows live enable/disable WITHOUT restarting the process.
+# Fallback: read ENV vars set at process spawn time.
+
+_WATCH_FOLDER = os.environ.get('ARCHIVA_WATCH_FOLDER', '')
+
+# ENV-based fallbacks (used at first startup before any sentinel is written)
+_ENV_AUTO_ENABLED = os.environ.get('AUTO_ANALYSIS_ENABLED', '1') == '1'
+_ENV_ACTIVATED_AT = os.environ.get('AUTO_ANALYSIS_ACTIVATED_AT', '')
+
+def _sentinel_dir():
+    folder = _WATCH_FOLDER or os.getcwd()
+    return os.path.join(folder, '.archiva')
+
+def _read_sentinel_enabled():
+    """Read live auto-analysis state from sentinel file."""
+    enabled_file = os.path.join(_sentinel_dir(), 'auto_analysis_enabled')
+    if os.path.exists(enabled_file):
+        try:
+            return open(enabled_file, 'r', encoding='utf-8').read().strip() == '1'
+        except Exception:
+            pass
+    return _ENV_AUTO_ENABLED  # Fallback to startup ENV
+
+def _read_sentinel_timestamp():
+    """Read live activation timestamp from sentinel file. Returns Unix float or None."""
+    ts_file = os.path.join(_sentinel_dir(), 'activation_timestamp')
+    if os.path.exists(ts_file):
+        try:
+            ts_str = open(ts_file, 'r', encoding='utf-8').read().strip()
+            if ts_str:
+                import datetime
+                dt = datetime.datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                return dt.timestamp()
+        except Exception as e:
+            print(f"Warning: Could not parse activation timestamp from sentinel: {e}", flush=True)
+        return None
+    # Fallback to ENV-based timestamp
+    if _ENV_ACTIVATED_AT:
+        try:
+            import datetime
+            dt = datetime.datetime.fromisoformat(_ENV_ACTIVATED_AT.replace('Z', '+00:00'))
+            return dt.timestamp()
+        except Exception:
+            pass
+    return None
+
 
 class ArchiveHandler(FileSystemEventHandler):
     def __init__(self, folder_path):
@@ -34,7 +85,7 @@ class ArchiveHandler(FileSystemEventHandler):
         # 2. Skip if already being processed concurrently
         if path in _processing_lock:
             return False
-        # 3. Skip if within cooldown window (Windows fires multiple events per move)
+        # 4. Skip if within cooldown window (Windows fires multiple events per move)
         last_seen = _recently_seen.get(path)
         if last_seen and (time.time() - last_seen) < _COOLDOWN_SECS:
             return False
@@ -59,7 +110,20 @@ class ArchiveHandler(FileSystemEventHandler):
         time.sleep(1)  # Brief pause to ensure file is fully written
         _processing_lock.add(src_path)
         try:
-            process_file(src_path, self.folder_path)
+            skip_ai = not _read_sentinel_enabled()
+            
+            # Check for force_ai override
+            file_name = os.path.basename(src_path)
+            normalized_name = unicodedata.normalize("NFC", file_name)
+            file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+            sentinel_dir = os.path.join(self.folder_path, '.archiva')
+            force_ai_file = os.path.join(sentinel_dir, f'force_ai_{file_id}.tmp')
+            if os.path.exists(force_ai_file):
+                skip_ai = False
+                try: os.remove(force_ai_file)
+                except: pass
+
+            process_file(src_path, self.folder_path, skip_ai=skip_ai)
         except Exception as e:
             print(f"Error processing {src_path}: {e}", flush=True)
         finally:
@@ -86,17 +150,57 @@ class ArchiveHandler(FileSystemEventHandler):
         time.sleep(1)
         _processing_lock.add(dest_path)
         try:
-            process_file(dest_path, self.folder_path)
+            skip_ai = not _read_sentinel_enabled()
+            
+            # Check for force_ai override
+            file_name = os.path.basename(dest_path)
+            normalized_name = unicodedata.normalize("NFC", file_name)
+            file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+            sentinel_dir = os.path.join(self.folder_path, '.archiva')
+            force_ai_file = os.path.join(sentinel_dir, f'force_ai_{file_id}.tmp')
+            if os.path.exists(force_ai_file):
+                skip_ai = False
+                try: os.remove(force_ai_file)
+                except: pass
+
+            process_file(dest_path, self.folder_path, skip_ai=skip_ai)
         except Exception as e:
             print(f"Error processing {dest_path}: {e}", flush=True)
         finally:
             _processing_lock.discard(dest_path)
 
 def start_watching(folder_path):
+    global _WATCH_FOLDER
+    _WATCH_FOLDER = os.path.abspath(folder_path)
+
     # Set the dynamic database path before anything else
     set_db_path(folder_path)
     print(f"Python DB Path: {get_db_path()}", flush=True)
     print(f"Service started. Watching: {folder_path}", flush=True)
+
+    # Bootstrap sentinel files from ENV vars if not yet written by main.js
+    sentinel_dir = os.path.join(_WATCH_FOLDER, '.archiva')
+    enabled_file = os.path.join(sentinel_dir, 'auto_analysis_enabled')
+    ts_file      = os.path.join(sentinel_dir, 'activation_timestamp')
+    if not os.path.exists(enabled_file):
+        try:
+            os.makedirs(sentinel_dir, exist_ok=True)
+            with open(enabled_file, 'w', encoding='utf-8') as f:
+                f.write('1' if _ENV_AUTO_ENABLED else '0')
+            if _ENV_AUTO_ENABLED and _ENV_ACTIVATED_AT:
+                with open(ts_file, 'w', encoding='utf-8') as f:
+                    f.write(_ENV_ACTIVATED_AT)
+            print(f"Bootstrapped sentinel files (enabled={_ENV_AUTO_ENABLED})", flush=True)
+        except Exception as e:
+            print(f"Warning: Could not bootstrap sentinel files: {e}", flush=True)
+
+    enabled_now  = _read_sentinel_enabled()
+    print(f"Auto-Analysis: {'ENABLED' if enabled_now else 'DISABLED'}", flush=True)
+    activation_ts = _read_sentinel_timestamp()
+    if activation_ts:
+        import datetime
+        activated_str = datetime.datetime.fromtimestamp(activation_ts).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"Activation Timestamp Gate: {activated_str} (files before this are ignored)", flush=True)
     
     # Check for API Key
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -109,24 +213,36 @@ def start_watching(folder_path):
     initialize_db()
     rebuild_index_recursive(folder_path)
     
-    # Now process any files that don't have a sidecar yet (existing unprocessed files)
-    print("Scanning for unprocessed files...", flush=True)
-    for root, dirs, files in os.walk(folder_path):
-        # Skip hidden folders
-        dirs[:] = [d for d in dirs if not d.startswith('.')]
-        for filename in files:
-            if filename.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.webp')):
-                sidecar = os.path.splitext(filename)[0] + '.json'
-                sidecar_path = os.path.join(root, sidecar)
-                if not os.path.exists(sidecar_path):
-                    print(f"Found unprocessed file: {filename} in {root}", flush=True)
-                    try:
-                        process_file(os.path.join(root, filename), folder_path)
-                    except Exception as e:
-                        print(f"Error processing {filename}: {e}", flush=True)
+    # Only scan for unprocessed files if auto-analysis is currently enabled
+    if enabled_now:
+        activation_ts = _read_sentinel_timestamp()
+        print("Scanning for unprocessed files...", flush=True)
+        for root, dirs, files in os.walk(folder_path):
+            dirs[:] = [d for d in dirs if not d.startswith('.')]
+            for filename in files:
+                if filename.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.webp')):
+                    file_path = os.path.join(root, filename)
+                    # Apply Timestamp Gate
+                    if activation_ts is not None:
+                        try:
+                            if os.path.getctime(file_path) < activation_ts:
+                                continue
+                        except Exception:
+                            pass
+                    sidecar = os.path.splitext(filename)[0] + '.json'
+                    sidecar_path = os.path.join(root, sidecar)
+                    if not os.path.exists(sidecar_path):
+                        print(f"Found unprocessed file: {filename} in {root}", flush=True)
+                        try:
+                            # In initial scan, if enabled_now is True, we use AI.
+                            # We only run initial scan if enabled_now is True, so skip_ai is False.
+                            process_file(os.path.join(root, filename), folder_path, skip_ai=False)
+                        except Exception as e:
+                            print(f"Error processing {filename}: {e}", flush=True)
+    else:
+        print("Auto-Analysis is DISABLED. Skipping initial scan.", flush=True)
     
     print("Initial sync complete.", flush=True)
-    # Signal Electron that the initial sync is done
     print(json.dumps({"type": "sync_complete"}, ensure_ascii=False), flush=True)
 
     event_handler = ArchiveHandler(folder_path)

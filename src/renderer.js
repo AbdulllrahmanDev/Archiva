@@ -9,6 +9,7 @@ const progressContainer = document.getElementById('progress-container');
 
 let documents = [];
 let pendingFiles = [];
+let forceAiForNextUpload = false;
 let currentView = 'add';
 let archiveLayout = 'grid';
 let isSelectionMode = false;
@@ -108,7 +109,14 @@ const i18n = {
         yesterday: "Yesterday",
         this_week: "Last 7 Days",
         this_month: "Earlier this Month",
-        older: "Older"
+        older: "Older",
+        auto_analysis_label: "Auto Analysis",
+        auto_analysis_desc: "Automatically analyze new files with AI",
+        auto_analysis_on: "Active — monitoring new files",
+        auto_analysis_off: "Inactive — files not being analyzed",
+        auto_analysis_enabled_toast: "Auto-Analysis enabled. Monitoring new files.",
+        auto_analysis_disabled_toast: "Auto-Analysis disabled.",
+        activated_since: "Active since:"
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -166,7 +174,14 @@ const i18n = {
         yesterday: "أمس",
         this_week: "آخر 7 أيام",
         this_month: "في وقت سابق من هذا الشهر",
-        older: "قديم جداً"
+        older: "قديم جداً",
+        auto_analysis_label: "التحليل التلقائي",
+        auto_analysis_desc: "تحليل الملفات الجديدة تلقائياً بالذكاء الاصطناعي",
+        auto_analysis_on: "نشط — يراقب الملفات الجديدة",
+        auto_analysis_off: "متوقف — لن يتم تحليل الملفات",
+        auto_analysis_enabled_toast: "تم تفعيل التحليل التلقائي. يراقب الملفات الجديدة الآن.",
+        auto_analysis_disabled_toast: "تم إيقاف التحليل التلقائي.",
+        activated_since: "نشط منذ:"
     }
 };
 
@@ -210,6 +225,12 @@ function updateSettingsUI() {
 
     if (storageLabel) storageLabel.innerText = t('storage_label');
     if (storageBtn) storageBtn.innerHTML = t('storage_change');
+
+    // Auto-Analysis UI
+    const autoLabel = document.getElementById('auto-analysis-label');
+    const autoDesc = document.getElementById('auto-analysis-desc');
+    if (autoLabel) autoLabel.innerText = t('auto_analysis_label');
+    if (autoDesc) autoDesc.innerText = t('auto_analysis_desc');
 
     refreshStorageDisplay();
     updateSegmentedIndicators();
@@ -268,11 +289,17 @@ const getViews = () => ({
                     </div>
                 </div>
                 <div id="staging-area" class="staging-area w-full grid grid-cols-12 gap-8 items-start">
-                    <div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-2xl editorial-shadow overflow-hidden border border-outline-variant/10">
-                        <div class="px-8 py-5 border-b border-outline-variant/5 bg-surface-container-low/30">
+                    <div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-2xl editorial-shadow overflow-hidden border border-outline-variant/10 flex flex-col max-h-[500px]">
+                        <div class="px-8 py-5 border-b border-outline-variant/5 bg-surface-container-low/30 flex items-center justify-between">
                             <h3 class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">${t('staged_archival')}</h3>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[9px] font-bold text-on-surface-variant/50">${currentLang === 'ar' ? 'فحص تلقائي (استثناء)' : 'Auto-Scan Override'}</span>
+                                <button id="force-ai-toggle" class="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 pointer-events-auto bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high" type="button">
+                                    ${getIcon('auto_awesome', 'sm')}
+                                </button>
+                            </div>
                         </div>
-                        <div id="pending-list" class="file-list-scroll divide-y divide-outline-variant/5"></div>
+                        <div id="pending-list" class="file-list-scroll flex-1 overflow-y-auto divide-y divide-outline-variant/5"></div>
                     </div>
                     <div class="col-span-12 lg:col-span-4 space-y-4">
                         <button id="confirm-upload-btn" class="w-full py-6 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-primary-dim transition-all" type="button">
@@ -1427,6 +1454,25 @@ function enterStagingState() {
     const iconWrapper = document.getElementById('upload-icon-container');
     if (iconWrapper) iconWrapper.innerHTML = getIcon('cloud_upload', 'xl');
 
+    // Reset force Ai toggler
+    forceAiForNextUpload = false;
+    const forceToggle = document.getElementById('force-ai-toggle');
+    if (forceToggle) {
+        forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
+        forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+        forceToggle.onclick = (e) => {
+            e.stopPropagation();
+            forceAiForNextUpload = !forceAiForNextUpload;
+            if (forceAiForNextUpload) {
+                forceToggle.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+                forceToggle.classList.add('bg-primary', 'text-white', 'shadow-md');
+            } else {
+                forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
+                forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+            }
+        };
+    }
+
     renderPendingList();
 
     const confirmBtn = document.getElementById('confirm-upload-btn');
@@ -1495,7 +1541,7 @@ async function confirmUploads() {
     showToast('archiving_msg', { count: pendingFiles.length }, 0);
 
     try {
-        const result = await window.api.processUploads(pendingFiles);
+        const result = await window.api.processUploads(pendingFiles, forceAiForNextUpload);
         console.log("Backend process-uploads result:", result);
 
         if (result && result.success) {
@@ -1709,17 +1755,25 @@ function selectDocument(id) {
             };
         }
 
-        const reAnalyzeBtn = detailsContainer.querySelector('#re-analyze-btn');
-        if (reAnalyzeBtn) {
-            reAnalyzeBtn.onclick = async () => {
-                if (await confirmAction('re_analyze_title', 're_analyze_msg', 'ai')) {
-                    const res = await window.api.reprocessDocument(doc.id, doc.file_path);
-                    if (res.success) {
-                        showToast(currentLang === 'ar' ? 'جاري إعادة التحليل...' : 'Re-analyzing...');
-                    }
-                }
+        const reanalyzeBtn = detailsContainer.querySelector('#re-analyze-btn');
+        if (reanalyzeBtn && !isProcessing) {
+            reanalyzeBtn.onclick = async (e) => {
+                e.stopPropagation();
+                // Play visual feedback immediately
+                reanalyzeBtn.classList.add('bg-primary/20', 'scale-95');
+                setTimeout(() => reanalyzeBtn.classList.remove('bg-primary/20', 'scale-95'), 150);
+                
+                showToast(currentLang === 'ar' ? 'جاري الفحص الدقيق...' : 'Running Deep Intelligence Scan...', {}, 3000);
+                
+                await window.api.reprocessDocument(doc.id, doc.file_path);
+                
+                // Switch local UI instantly while waiting for backend
+                doc.status = 'processing';
+                selectDocument(doc.id);
             };
         }
+
+    // Duplication removed
     }
     if (insightRail) insightRail.classList.add('translate-x-full');
 }
@@ -2027,3 +2081,96 @@ if (window.api && window.api.sendReady) {
         window.api.sendReady();
     }, 250);
 }
+
+// ============================================================
+// AUTO-ANALYSIS TOGGLE LOGIC
+// ============================================================
+
+let _autoAnalysisEnabled = false; // local state mirror
+
+function setAutoAnalysisUI(enabled, activatedAt) {
+    _autoAnalysisEnabled = enabled;
+    const toggleBtn     = document.getElementById('auto-analysis-toggle');
+    const badge         = document.getElementById('auto-analysis-badge');
+    const activatedSpan = document.getElementById('auto-analysis-activated-at');
+    const descEl        = document.getElementById('auto-analysis-desc');
+
+    if (!toggleBtn) return;
+
+    // Animate the toggle switch
+    toggleBtn.classList.toggle('on', enabled);
+    toggleBtn.classList.toggle('off', !enabled);
+    toggleBtn.setAttribute('aria-checked', String(enabled));
+
+    // Update description text
+    if (descEl) descEl.innerText = t(enabled ? 'auto_analysis_on' : 'auto_analysis_off');
+
+    // Show/hide activation timestamp badge
+    if (badge && activatedSpan) {
+        if (enabled && activatedAt) {
+            try {
+                const dt = new Date(activatedAt);
+                const formatted = dt.toLocaleString(currentLang === 'ar' ? 'ar-SA' : 'en-GB', {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+                activatedSpan.innerText = `${t('activated_since')} ${formatted}`;
+                badge.classList.remove('hidden');
+            } catch (e) {
+                badge.classList.add('hidden');
+            }
+        } else {
+            badge.classList.add('hidden');
+        }
+    }
+}
+
+async function initAutoAnalysisToggle() {
+    if (!window.api || !window.api.getAutoAnalysisStatus) return;
+    try {
+        const status = await window.api.getAutoAnalysisStatus();
+        setAutoAnalysisUI(status.enabled, status.activatedAt);
+    } catch (e) {
+        console.error('Failed to load auto-analysis status:', e);
+        setAutoAnalysisUI(true, null); // Fallback: show as enabled
+    }
+}
+
+// Attach click handler to the toggle button
+const autoAnalysisToggleBtn = document.getElementById('auto-analysis-toggle');
+if (autoAnalysisToggleBtn) {
+    autoAnalysisToggleBtn.addEventListener('click', async () => {
+        const nextState = !_autoAnalysisEnabled;
+
+        // Immediately flip UI for instant tactile feedback
+        setAutoAnalysisUI(nextState, nextState ? new Date().toISOString() : null);
+
+        // Prevent double-clicks during async IPC
+        autoAnalysisToggleBtn.disabled = true;
+        autoAnalysisToggleBtn.style.opacity = '0.7';
+
+        try {
+            const result = await window.api.toggleAutoAnalysis(nextState);
+            if (result && result.success) {
+                // Sync with actual server response (real activatedAt timestamp)
+                setAutoAnalysisUI(result.enabled, result.activatedAt);
+                const toastKey = result.enabled
+                    ? 'auto_analysis_enabled_toast'
+                    : 'auto_analysis_disabled_toast';
+                showToast(toastKey, {}, 4000);
+            } else {
+                // Revert UI on failure
+                setAutoAnalysisUI(!nextState, null);
+            }
+        } catch (e) {
+            console.error('Failed to toggle auto-analysis:', e);
+            setAutoAnalysisUI(!nextState, null); // revert on error
+        } finally {
+            autoAnalysisToggleBtn.disabled = false;
+            autoAnalysisToggleBtn.style.opacity = '1';
+        }
+    });
+}
+
+// Load and display current status on startup
+initAutoAnalysisToggle();

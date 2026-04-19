@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('api', {
     },
     getDocuments: () => ipcRenderer.invoke('get-documents'),
     selectFiles: () => ipcRenderer.invoke('select-files'),
-    processUploads: (files) => ipcRenderer.invoke('process-uploads', files),
+    processUploads: (files, forceAi) => ipcRenderer.invoke('process-uploads', files, forceAi),
     openPath: (path) => ipcRenderer.invoke('open-path', path),
     exportFile: (sourcePath, defaultName) => ipcRenderer.invoke('export-file', sourcePath, defaultName),
     sendChat: (messages) => ipcRenderer.invoke('ai-chat', messages),
@@ -30,5 +30,9 @@ contextBridge.exposeInMainWorld('api', {
     // Document Editing
     updateDocument: (id, fields) => ipcRenderer.invoke('update-document', id, fields),
     reprocessDocument: (id, filePath) => ipcRenderer.invoke('reprocess-document', id, filePath),
-    setNativeTheme: (theme) => ipcRenderer.send('set-native-theme', theme)
+    setNativeTheme: (theme) => ipcRenderer.send('set-native-theme', theme),
+
+    // Auto-Analysis Toggle
+    getAutoAnalysisStatus: () => ipcRenderer.invoke('get-auto-analysis-status'),
+    toggleAutoAnalysis: (enabled) => ipcRenderer.invoke('toggle-auto-analysis', enabled)
 });

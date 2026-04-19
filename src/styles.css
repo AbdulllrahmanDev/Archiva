@@ -487,6 +487,15 @@ html.dark .filter-menu-flyout {
     scrollbar-gutter: auto;
 }
 
+/* Hide scrollbar visually but keep scrolling functional */
+.scrollbar-hide {
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* IE / Edge */
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;               /* Chrome / Safari / Electron */
+}
+
 /* Glassmorphism helpers */
 .glass-panel {
     background: rgba(255, 255, 255, 0.8);

@@ -373,7 +373,7 @@ def real_ai_analyze(text, filename, file_path=None):
 
 
 def mock_ai_analyze(text, filename):
-    """Fallback logic if real AI fails."""
+    """Fallback logic if real AI fails, or if Auto-Analysis is disabled."""
     ext = os.path.splitext(filename)[1].lower()
     file_format = "PDF" if ext == ".pdf" else "IMAGE"
 
@@ -383,15 +383,15 @@ def mock_ai_analyze(text, filename):
 
     return {
         "title": readable_title,
-        "subject": "غير محدد",
-        "project": "غير محدد",
-        "doc_date": datetime.datetime.now().strftime("%Y-%m-%d"),
-        "version_no": "غير محدد",
+        "subject": "",
+        "project": "",
+        "doc_date": "",
+        "version_no": "",
         "type": file_format,
-        "class": "وثيقة",
-        "area": "غير محدد",
+        "class": "أخرى",
+        "area": "",
         "tags": [],
-        "summary": f"تعذّر التحليل التلقائي للملف {filename}. يرجى مراجعة الملف يدوياً.",
+        "summary": f"تمت الإضافة بدون تحليل (الذكاء الاصطناعي مغلق). يرجى التعديل يدوياً.",
     }
 
 
@@ -468,7 +468,11 @@ def organize_file_copy(doc_data, base_archive_path):
     return None
 
 
-def process_file(file_path, output_folder):
+def process_file(file_path, output_folder, skip_ai=False):
+    """
+    1. Extracts text via OCR or basic text extraction
+    2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
+    """
     file_path = os.path.abspath(file_path)
     output_folder = os.path.abspath(output_folder)
 
@@ -514,22 +518,26 @@ def process_file(file_path, output_folder):
 
         content = content or ""  # Ensure it's not None
 
-        report_status("status_ai", 80, doc_id=file_id)
-        ai_data = real_ai_analyze(content, file_name, file_path)
-
-        # Fallback if AI fails
-        if not ai_data:
-            report_status(
-                "status_error",
-                85,
-                doc_id=file_id,
-                extra={"error": "AI analysis failed to extract JSON data."},
-            )
-            print(
-                f"AI ERROR: Failed to extract data for {file_name}. Falling back to mock.",
-                flush=True,
-            )
+        if skip_ai:
+            print(f"Auto-Analysis is OFF. Ingesting {file_name} instantly without AI.", flush=True)
             ai_data = mock_ai_analyze(content, file_name)
+        else:
+            report_status("status_ai", 80, doc_id=file_id)
+            ai_data = real_ai_analyze(content, file_name, file_path)
+
+            # Fallback if AI fails
+            if not ai_data:
+                report_status(
+                    "status_error",
+                    85,
+                    doc_id=file_id,
+                    extra={"error": "AI analysis failed to extract JSON data."},
+                )
+                print(
+                    f"AI ERROR: Failed to extract data for {file_name}. Falling back to mock.",
+                    flush=True,
+                )
+                ai_data = mock_ai_analyze(content, file_name)
 
         date_str = datetime.datetime.now().strftime("%Y-%m-%d")
 
@@ -596,4 +604,13 @@ def process_file(file_path, output_folder):
 
 
 if __name__ == "__main__":
-    pass
+    if len(sys.argv) > 2:
+        file_path_arg = sys.argv[1]
+        output_folder_arg = sys.argv[2]
+        from db_manager import set_db_path
+        set_db_path(output_folder_arg)
+        try:
+            # Force AI explicitly since this is a manual CLI invocation (like Re-analyze)
+            process_file(file_path_arg, output_folder_arg, skip_ai=False)
+        except Exception as e:
+            print(f"CLI Processing error: {e}", flush=True)
