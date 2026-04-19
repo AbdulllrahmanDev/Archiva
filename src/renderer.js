@@ -397,11 +397,15 @@ const getViews = () => ({
                                 </div>
                             </div>
                         </div>
-                        <div id="document-intelligence" class="hidden p-8 bg-surface-container-low rounded-[2rem] border border-outline-variant/5">
-                            <button id="back-to-insights" class="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest mb-6 transition-transform">
-                                ${getIcon('arrow_back', 'sm flip-rtl')} ${t('back_to_insights')}
-                            </button>
-                            <div id="sidebar-doc-details" class="space-y-6"></div>
+                        <div id="document-intelligence" class="hidden bg-surface-container-low rounded-[2rem] border border-outline-variant/5 overflow-hidden">
+                            <div class="max-h-[85vh] overflow-y-auto custom-scrollbar" style="direction: ltr;">
+                                <div style="direction: ${currentLang === 'ar' ? 'rtl' : 'ltr'};" class="p-8 min-h-full">
+                                    <button id="back-to-insights" class="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest mb-6 transition-transform">
+                                        ${getIcon('arrow_back', 'sm flip-rtl')} ${t('back_to_insights')}
+                                    </button>
+                                    <div id="sidebar-doc-details" class="space-y-6"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
