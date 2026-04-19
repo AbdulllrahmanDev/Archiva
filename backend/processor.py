@@ -433,6 +433,18 @@ def organize_file_copy(doc_data, base_archive_path):
         # تنظيف الموضوع ليكون صالحاً كاسم ملف
         clean_subject = sanitize_folder_name(subject_raw)
 
+        # الاحتفاظ بالامتد�ير_محدد"
+        project = sanitize_folder_name(project_raw)
+
+        # بناء المسار: السنة / المشروع
+        target_dir = os.path.join(base_archive_path, year, project)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # استخراج اسم الملف الجديد من "الموضوع"
+        subject_raw = doc_data.get("subject") or "وثيقة_غير_معروفة"
+        # تنظيف الموضوع ليكون صالحاً كاسم ملف
+        clean_subject = sanitize_folder_name(subject_raw)
+
         # الاحتفاظ بالامتداد الأصلي
         ext = os.path.splitext(doc_data.get("file", ".pdf"))[1]
         if not ext:
@@ -468,7 +480,7 @@ def organize_file_copy(doc_data, base_archive_path):
     return None
 
 
-def process_file(file_path, output_folder, skip_ai=False):
+def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False):
     """
     1. Extracts text via OCR or basic text extraction
     2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
@@ -484,7 +496,7 @@ def process_file(file_path, output_folder, skip_ai=False):
 
     # 1. Check for local hidden sidecar JSON first (Fast Skip)
     sidecar_path = os.path.splitext(file_path)[0] + ".json"
-    if os.path.exists(sidecar_path):
+    if not force_reprocess and os.path.exists(sidecar_path):
         print(
             f"Smart Skip: Sidecar already exists next to file: {file_name}", flush=True
         )
@@ -493,7 +505,7 @@ def process_file(file_path, output_folder, skip_ai=False):
     # 2. Check content fingerprint (SHA256) in Database (Deeper Skip)
     file_hash = get_file_hash(file_path)
     existing_doc = get_document_by_sha256(file_hash)
-    if existing_doc:
+    if not force_reprocess and existing_doc:
         # If it exists in DB but not as a sidecar here, it might have been moved
         # We skip to avoid re-analysis, but could update path if needed
         print(
@@ -611,6 +623,6 @@ if __name__ == "__main__":
         set_db_path(output_folder_arg)
         try:
             # Force AI explicitly since this is a manual CLI invocation (like Re-analyze)
-            process_file(file_path_arg, output_folder_arg, skip_ai=False)
+            process_file(file_path_arg, output_folder_arg, skip_ai=False, force_reprocess=True)
         except Exception as e:
             print(f"CLI Processing error: {e}", flush=True)
