@@ -291,7 +291,7 @@ def import_external_folder(external_folder, main_archive_folder):
 
 if __name__ == '__main__':
     # Get folder path from argument or default
-    watch_folder = os.path.abspath(os.path.join(os.getcwd(), 'MAIN Archiva'))
+    watch_folder = os.path.abspath(os.path.join(os.getcwd(), 'Archiva Data'))
     
     if len(sys.argv) > 1:
         if sys.argv[1] == '--import':

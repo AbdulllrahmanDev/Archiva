@@ -7,7 +7,7 @@ import ctypes
 
 # Global configuration for the database path
 DB_CONFIG = {
-    "path": os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'MAIN Archiva', 'archiva.db'))
+    "path": os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'Archiva Data', 'archiva.db'))
 }
 
 def set_db_path(folder_path):

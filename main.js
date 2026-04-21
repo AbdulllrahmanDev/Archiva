@@ -24,7 +24,7 @@ if (!app.isPackaged) {
             /.*\.sqlite3/, 
             /.*\.db/, 
             /.*[/\\]archive[/\\]/, 
-            /.*[/\\]MAIN Archiva[/\\]/
+            /.*[/\\]Archiva Data[/\\]/
         ],
         hardResetMethod: 'exit'
     });
@@ -73,7 +73,7 @@ function initStorage() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
     let savedPath = app.isPackaged 
         ? path.join(app.getPath('documents'), 'Archiva Storage')
-        : path.join(__dirname, 'MAIN Archiva');
+        : path.join(__dirname, 'Archiva Data');
     if (fs.existsSync(configPath)) {
         try {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
