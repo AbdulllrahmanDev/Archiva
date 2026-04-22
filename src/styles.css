@@ -322,6 +322,7 @@ html.dark .curator-card:hover {
     max-height: 70vh;
     overflow-y: auto;
     -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
 }
 
 .filter-menu-flyout.active {
