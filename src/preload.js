@@ -35,5 +35,9 @@ contextBridge.exposeInMainWorld('api', {
 
     // Auto-Analysis Toggle
     getAutoAnalysisStatus: () => ipcRenderer.invoke('get-auto-analysis-status'),
-    toggleAutoAnalysis: (enabled) => ipcRenderer.invoke('toggle-auto-analysis', enabled)
+    toggleAutoAnalysis: (enabled) => ipcRenderer.invoke('toggle-auto-analysis', enabled),
+
+    // PDF Split Toggle
+    getPdfSplitStatus: () => ipcRenderer.invoke('get-pdf-split-status'),
+    togglePdfSplit: (enabled) => ipcRenderer.invoke('toggle-pdf-split', enabled)
 });

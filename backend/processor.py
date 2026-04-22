@@ -1,4 +1,4 @@
-﻿import fitz  # PyMuPDF
+import fitz  # PyMuPDF
 import pytesseract
 from PIL import Image
 import os
@@ -16,7 +16,7 @@ import re
 import base64
 import ctypes
 import unicodedata
-from db_manager import add_document, get_document_by_sha256
+from db_manager import add_document, get_document_by_sha256, delete_document
 
 # Force UTF-8 for Windows output
 if sys.platform == "win32":
@@ -372,6 +372,154 @@ def real_ai_analyze(text, filename, file_path=None):
     return None
 
 
+def ai_detect_pdf_splits(file_path, filename):
+    """Calls AI to detect if a PDF contains multiple documents and identify page ranges."""
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-001")
+
+    if not api_key:
+        return None
+
+    # Get some text context from first 15 pages to help AI
+    text_context = ""
+    try:
+        doc = fitz.open(file_path)
+        num_pages = len(doc)
+        for i in range(min(num_pages, 15)):
+            page_text = doc[i].get_text().strip()
+            text_context += f"--- Page {i+1} ---\n{page_text[:500]}\n"
+        doc.close()
+    except Exception as e:
+        print(f"Error reading PDF for split detection: {e}", flush=True)
+
+    prompt = f"""أنت خبير في تنظيم الأرشيف الإداري. مهمتك هي فحص ملف PDF وتحديد ما إذا كان يحتوي على عدة وثائق مستقلة (مثل خطابات منفصلة، قرارات، تقارير، أو مشاريع مختلفة) مجمعة في ملف واحد.
+    
+    اسم الملف: {filename}
+    عدد الصفحات: {num_pages}
+    
+    محتوى النص المستخرج (عينة):
+    {text_context}
+    
+    المطلوب:
+    1. حدد ما إذا كان الملف يحتاج لتقسيم إلى وثائق منفصلة.
+    2. لكل وثيقة مستقلة، استخرج موضوعاً دقيقاً ومختصراً (Subject) يعبر عن محتواها.
+    3. حدد نطاق الصفحات (البداية والنهاية) لكل وثيقة.
+    
+    أرجع النتيجة بصيغة JSON فقط كقائمة من الكائنات:
+    [
+      {{
+        "subject": "موضوع الوثيقة الأولى بدقة (مثال: خطاب وزارة المالية بشأن الميزانية)",
+        "pages": [1, 2] 
+      }},
+      {{
+        "subject": "موضوع الوثيقة الثانية بدقة (مثال: محضر اجتماع اللجنة الفنية)",
+        "pages": [3, 4, 5]
+      }}
+    ]
+    
+    قواعد هامة:
+    1. إذا كان الملف وثيقة واحدة متصلة فقط، أرجع قائمة فارغة [].
+    2. تأكد أن أرقام الصفحات (1-indexed) تغطي كامل الملف بالتسلسل ولا تتداخل.
+    3. ابحث عن الترويسات (Headers) الجديدة، التواقيع، أو تغيير المواضيع كعلامات للفصل.
+    4. اجعل الموضوع (subject) مناسباً ليكون اسماً للملف لاحقاً.
+    """
+
+    try:
+        # Multimodal request including the full PDF context if possible
+        base64_data = get_file_base64(file_path)
+        payload = {
+            "model": ai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:application/pdf;base64,{base64_data}"},
+                        },
+                    ],
+                }
+            ],
+            "response_format": {"type": "json_object"},
+        }
+
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload),
+            timeout=60,
+        )
+
+        if response.status_code == 200:
+            result = response.json()
+            raw_content = result["choices"][0]["message"]["content"]
+            
+            # Robust extraction
+            def extract_split_json(text):
+                try:
+                    # Find potential JSON block using regex if wrapped in markdown
+                    json_match = re.search(r"\[.*\]", text, re.DOTALL)
+                    if json_match:
+                        return json.loads(json_match.group(0))
+                except: pass
+                return []
+
+            return extract_split_json(raw_content)
+    except Exception as e:
+        print(f"AI Split Detection Failed: {e}", flush=True)
+
+    return None
+
+
+def split_pdf_file(file_path, split_data):
+    """Splits a PDF into multiple files based on page ranges."""
+    split_files = []
+    try:
+        doc = fitz.open(file_path)
+        base_dir = os.path.dirname(file_path)
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        
+        for i, item in enumerate(split_data):
+            pages = item.get("pages", [])
+            if not pages: continue
+            
+            new_doc = fitz.open()
+            # Handle pages list [1, 2, 3] or [start, end]
+            if len(pages) > 2 or (len(pages) == 2 and pages[1] == pages[0] + 1):
+                for p in pages:
+                    if 1 <= p <= len(doc):
+                        new_doc.insert_pdf(doc, from_page=p-1, to_page=p-1)
+            else:
+                # Assume [start, end]
+                start = max(1, pages[0])
+                end = min(len(doc), pages[-1])
+                new_doc.insert_pdf(doc, from_page=start-1, to_page=end-1)
+            
+            # Sanitize subject for filename
+            safe_subject = sanitize_folder_name(item.get("subject", f"part_{i+1}"))
+            output_filename = f"{base_name}_{safe_subject}.pdf"
+            output_path = os.path.join(base_dir, output_filename)
+            
+            # Prevent collisions
+            if os.path.exists(output_path):
+                output_path = os.path.join(base_dir, f"{base_name}_{safe_subject}_{int(time.time())%1000}.pdf")
+
+            new_doc.save(output_path)
+            new_doc.close()
+            split_files.append(output_path)
+            print(f"Created split part: {output_path}", flush=True)
+            
+        doc.close()
+    except Exception as e:
+        print(f"Error splitting PDF: {e}", flush=True)
+        
+    return split_files
+
+
 def mock_ai_analyze(text, filename):
     """Fallback logic if real AI fails, or if Auto-Analysis is disabled."""
     ext = os.path.splitext(filename)[1].lower()
@@ -480,7 +628,7 @@ def organize_file_copy(doc_data, base_archive_path):
     return None
 
 
-def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None):
+def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None, split_pdf=False):
     """
     1. Extracts text via OCR or basic text extraction
     2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
@@ -522,6 +670,31 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
             flush=True,
         )
         return None
+
+    # 3. PDF Splitting Logic
+    if ext == ".pdf" and split_pdf and not skip_ai:
+        print(f"Checking if PDF needs splitting: {file_name}", flush=True)
+        report_status("status_split_check", 5, doc_id=doc_id, extra={"file": file_name})
+        split_data = ai_detect_pdf_splits(file_path, file_name)
+        if split_data and len(split_data) > 1:
+            print(f"AI detected {len(split_data)} documents in PDF. Splitting...", flush=True)
+            report_status("status_splitting", 10, doc_id=doc_id)
+            parts = split_pdf_file(file_path, split_data)
+            if parts:
+                # Move original to .original folder to avoid reprocessing and keep it safe
+                original_dir = os.path.join(output_folder, ".original")
+                os.makedirs(original_dir, exist_ok=True)
+                shutil.move(file_path, os.path.join(original_dir, file_name))
+                
+                # Delete original record from DB if it exists (created by main.js process-uploads)
+                if doc_id:
+                    print(f"Deleting original record for split file: {doc_id}", flush=True)
+                    delete_document(doc_id)
+
+                # Process each part
+                for part in parts:
+                    process_file(part, output_folder, skip_ai=skip_ai, force_reprocess=force_reprocess, split_pdf=False)
+                return None # Finished processing parts
 
     print(f"Processing: {file_path}", flush=True)
 
@@ -593,6 +766,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         organized_path = organize_file_copy(doc_data, output_folder)
         if organized_path:
             doc_data["file_path"] = organized_path
+            doc_data["file"] = os.path.basename(organized_path)
 
         # Determine final sidecar path (alongside the file, wherever it is)
         current_file_path = doc_data["file_path"]

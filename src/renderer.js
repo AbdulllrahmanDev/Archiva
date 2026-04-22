@@ -138,7 +138,11 @@ const i18n = {
         activated_since: "Active since:",
         file_path: "File Path",
         copied: "Copied!",
-        copy_path: "Copy Path"
+        copy_path: "Copy Path",
+        pdf_split_label: "Split Multi-Project PDFs",
+        pdf_split_desc: "Automatically split PDFs containing multiple documents",
+        pdf_split_enabled_toast: "PDF Splitting enabled.",
+        pdf_split_disabled_toast: "PDF Splitting disabled.",
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -206,7 +210,11 @@ const i18n = {
         activated_since: "نشط منذ:",
         file_path: "مسار الملف",
         copied: "تم النسخ!",
-        copy_path: "نسخ المسار"
+        copy_path: "نسخ المسار",
+        pdf_split_label: "فصل ملفات PDF المجمعة",
+        pdf_split_desc: "فصل ملفات PDF التي تحتوي على عدة مشاريع تلقائياً",
+        pdf_split_enabled_toast: "تم تفعيل خاصية فصل الملفات.",
+        pdf_split_disabled_toast: "تم إيقاف خاصية فصل الملفات.",
     }
 };
 
@@ -256,6 +264,12 @@ function updateSettingsUI() {
     const autoDesc = document.getElementById('auto-analysis-desc');
     if (autoLabel) autoLabel.innerText = t('auto_analysis_label');
     if (autoDesc) autoDesc.innerText = t('auto_analysis_desc');
+
+    // PDF Splitting UI
+    const pdfSplitLabel = document.getElementById('pdf-split-label');
+    const pdfSplitDesc = document.getElementById('pdf-split-desc');
+    if (pdfSplitLabel) pdfSplitLabel.innerText = t('pdf_split_label');
+    if (pdfSplitDesc) pdfSplitDesc.innerText = t('pdf_split_desc');
 
     refreshStorageDisplay();
     updateSegmentedIndicators();
@@ -2249,6 +2263,65 @@ if (autoAnalysisToggleBtn) {
 
 // Load and display current status on startup
 initAutoAnalysisToggle();
+
+// ============================================================
+// PDF SPLITTING TOGGLE LOGIC
+// ============================================================
+
+let _pdfSplitEnabled = false;
+
+function setPdfSplitUI(enabled) {
+    _pdfSplitEnabled = enabled;
+    const toggleBtn = document.getElementById('pdf-split-toggle');
+    if (!toggleBtn) return;
+
+    toggleBtn.classList.toggle('on', enabled);
+    toggleBtn.classList.toggle('off', !enabled);
+    toggleBtn.setAttribute('aria-checked', String(enabled));
+}
+
+async function initPdfSplitToggle() {
+    if (!window.api || !window.api.getPdfSplitStatus) return;
+    try {
+        const status = await window.api.getPdfSplitStatus();
+        setPdfSplitUI(status.enabled);
+    } catch (e) {
+        console.error('Failed to load PDF split status:', e);
+        setPdfSplitUI(false); // Default: disabled
+    }
+}
+
+const pdfSplitToggleBtn = document.getElementById('pdf-split-toggle');
+if (pdfSplitToggleBtn) {
+    pdfSplitToggleBtn.addEventListener('click', async () => {
+        const nextState = !_pdfSplitEnabled;
+        setPdfSplitUI(nextState);
+
+        pdfSplitToggleBtn.disabled = true;
+        pdfSplitToggleBtn.style.opacity = '0.7';
+
+        try {
+            const result = await window.api.togglePdfSplit(nextState);
+            if (result && result.success) {
+                setPdfSplitUI(result.enabled);
+                const toastKey = result.enabled
+                    ? 'pdf_split_enabled_toast'
+                    : 'pdf_split_disabled_toast';
+                showToast(toastKey, {}, 4000);
+            } else {
+                setPdfSplitUI(!nextState);
+            }
+        } catch (e) {
+            console.error('Failed to toggle PDF split:', e);
+            setPdfSplitUI(!nextState);
+        } finally {
+            pdfSplitToggleBtn.disabled = false;
+            pdfSplitToggleBtn.style.opacity = '1';
+        }
+    });
+}
+
+initPdfSplitToggle();
 
 const scrollToTopBtn = document.getElementById('scroll-to-top-btn');
 

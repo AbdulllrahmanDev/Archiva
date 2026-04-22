@@ -40,6 +40,7 @@ let watchFolder;
 let db;
 let autoAnalysisEnabled = true;
 let autoAnalysisActivatedAt = null;
+let pdfSplitEnabled = false;
 
 function loadAutoAnalysisConfig() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
@@ -66,7 +67,9 @@ function loadAutoAnalysisConfig() {
     }
 
     autoAnalysisActivatedAt = config.autoAnalysisActivatedAt || null;
+    pdfSplitEnabled = config.pdfSplitEnabled !== false; // Default true
     console.log(`Auto-Analysis: ${autoAnalysisEnabled ? 'ENABLED' : 'DISABLED'}, ActivatedAt: ${autoAnalysisActivatedAt || 'N/A'}`);
+    console.log(`PDF Splitting: ${pdfSplitEnabled ? 'ENABLED' : 'DISABLED'}`);
 }
 
 function initStorage() {
@@ -201,6 +204,7 @@ function startBackend() {
             AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001',
             AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
             AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
+            PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0',
             ARCHIVA_WATCH_FOLDER: watchFolder
         }
     });
@@ -266,8 +270,8 @@ function sendUpdateToRenderer() {
 app.whenReady().then(() => {
     loadAutoAnalysisConfig();
     initStorage();
-    // Write sentinel files so the watcher starts with correct auto-analysis state
-    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt);
+    // Write sentinel files so the watcher starts with correct state
+    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, pdfSplitEnabled);
     createWindow();
     startBackend();
 
@@ -827,10 +831,35 @@ ipcMain.handle('toggle-auto-analysis', async (event, enabled) => {
     autoAnalysisActivatedAt = config.autoAnalysisActivatedAt;
 
     // Write sentinel files so watcher.py picks up the change WITHOUT a restart
-    writeSentinelFiles(enabled, config.autoAnalysisActivatedAt);
-
+    writeSentinelFiles(enabled, config.autoAnalysisActivatedAt, pdfSplitEnabled);
     console.log(`Auto-Analysis toggled: ${enabled ? 'ENABLED' : 'DISABLED'} at ${autoAnalysisActivatedAt || 'N/A'}`);
     return { success: true, enabled, activatedAt: config.autoAnalysisActivatedAt };
+});
+
+ipcMain.handle('get-pdf-split-status', async () => {
+    return { enabled: pdfSplitEnabled };
+});
+
+ipcMain.handle('toggle-pdf-split', async (event, enabled) => {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+    }
+
+    config.pdfSplitEnabled = enabled;
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (e) {
+        console.error('Error saving PDF split config:', e);
+        return { success: false, error: e.message };
+    }
+
+    pdfSplitEnabled = enabled;
+    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, enabled);
+
+    console.log(`PDF Splitting toggled: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    return { success: true, enabled };
 });
 
 /**
@@ -838,12 +867,13 @@ ipcMain.handle('toggle-auto-analysis', async (event, enabled) => {
  * watcher.py polls these files to know the current auto-analysis state.
  * No backend restart needed — state change takes effect within ~2 seconds.
  */
-function writeSentinelFiles(enabled, activatedAt) {
+function writeSentinelFiles(enabled, activatedAt, splitEnabled) {
     if (!watchFolder || !fs.existsSync(watchFolder)) return;
 
     const sentinelDir  = path.join(watchFolder, '.archiva');
     const enabledFile  = path.join(sentinelDir, 'auto_analysis_enabled');
     const tsFile       = path.join(sentinelDir, 'activation_timestamp');
+    const splitFile    = path.join(sentinelDir, 'pdf_split_enabled');
 
     try {
         if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
@@ -856,7 +886,11 @@ function writeSentinelFiles(enabled, activatedAt) {
             // Keep the timestamp file gone so next enable gets fresh ts
             if (fs.existsSync(tsFile)) fs.unlinkSync(tsFile);
         }
-        console.log(`Sentinel files updated: enabled=${enabled}, ts=${activatedAt || 'N/A'}`);
+
+        // PDF Split sentinel
+        fs.writeFileSync(splitFile, splitEnabled ? '1' : '0', 'utf8');
+
+        console.log(`Sentinel files updated: auto=${enabled}, ts=${activatedAt || 'N/A'}, split=${splitEnabled}`);
     } catch (e) {
         console.error('Error writing sentinel files:', e);
     }

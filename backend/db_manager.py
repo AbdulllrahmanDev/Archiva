@@ -199,6 +199,14 @@ def get_document_by_sha256(sha256):
     conn.close()
     return dict(row) if row else None
 
+def delete_document(doc_id):
+    """Deletes a document record from the database by ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
+    conn.commit()
+    conn.close()
+
 if __name__ == '__main__':
     initialize_db()
     print("Database initialized.", flush=True)

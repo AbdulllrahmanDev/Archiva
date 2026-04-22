@@ -49,6 +49,16 @@ def _read_sentinel_enabled():
             pass
     return _ENV_AUTO_ENABLED  # Fallback to startup ENV
 
+def _read_sentinel_split_enabled():
+    """Read live PDF splitting state from sentinel file."""
+    split_file = os.path.join(_sentinel_dir(), 'pdf_split_enabled')
+    if os.path.exists(split_file):
+        try:
+            return open(split_file, 'r', encoding='utf-8').read().strip() == '1'
+        except Exception:
+            pass
+    return os.environ.get('PDF_SPLIT_ENABLED', '0') == '1' # Fallback to startup ENV
+
 def _read_sentinel_timestamp():
     """Read live activation timestamp from sentinel file. Returns Unix float or None."""
     ts_file = os.path.join(_sentinel_dir(), 'activation_timestamp')
@@ -123,7 +133,9 @@ class ArchiveHandler(FileSystemEventHandler):
                 try: os.remove(force_ai_file)
                 except: pass
 
-            process_file(src_path, self.folder_path, skip_ai=skip_ai)
+            split_pdf = _read_sentinel_split_enabled()
+
+            process_file(src_path, self.folder_path, skip_ai=skip_ai, split_pdf=split_pdf)
         except Exception as e:
             print(f"Error processing {src_path}: {e}", flush=True)
         finally:
@@ -163,7 +175,9 @@ class ArchiveHandler(FileSystemEventHandler):
                 try: os.remove(force_ai_file)
                 except: pass
 
-            process_file(dest_path, self.folder_path, skip_ai=skip_ai)
+            split_pdf = _read_sentinel_split_enabled()
+
+            process_file(dest_path, self.folder_path, skip_ai=skip_ai, split_pdf=split_pdf)
         except Exception as e:
             print(f"Error processing {dest_path}: {e}", flush=True)
         finally:
@@ -234,9 +248,10 @@ def start_watching(folder_path):
                     if not os.path.exists(sidecar_path):
                         print(f"Found unprocessed file: {filename} in {root}", flush=True)
                         try:
+                            split_pdf = _read_sentinel_split_enabled()
                             # In initial scan, if enabled_now is True, we use AI.
                             # We only run initial scan if enabled_now is True, so skip_ai is False.
-                            process_file(os.path.join(root, filename), folder_path, skip_ai=False)
+                            process_file(os.path.join(root, filename), folder_path, skip_ai=False, split_pdf=split_pdf)
                         except Exception as e:
                             print(f"Error processing {filename}: {e}", flush=True)
     else:
