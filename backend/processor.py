@@ -16,6 +16,7 @@ import re
 import base64
 import ctypes
 import unicodedata
+import difflib
 from db_manager import add_document, get_document_by_sha256, delete_document
 
 # Force UTF-8 for Windows output
@@ -129,7 +130,7 @@ def get_file_base64(file_path):
 def real_ai_analyze(text, filename, file_path=None):
     """Call OpenRouter API to analyze the document content using Multimodal Vision."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-001")
+    ai_model = os.environ.get("AI_MODEL", "google/gemma-4-31b-it:free")
 
     if not api_key:
         print("Error: OPENROUTER_API_KEY is missing in background process.", flush=True)
@@ -375,19 +376,27 @@ def real_ai_analyze(text, filename, file_path=None):
 def ai_detect_pdf_splits(file_path, filename):
     """Calls AI to detect if a PDF contains multiple documents and identify page ranges."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-001")
+    ai_model = os.environ.get("AI_MODEL", "google/gemma-4-31b-it:free")
 
     if not api_key:
         return None
 
-    # Get some text context from first 15 pages to help AI
+    # 1. Gather Text Context (First 15 pages)
     text_context = ""
+    num_pages = 0
+    images_payload = []
     try:
         doc = fitz.open(file_path)
         num_pages = len(doc)
         for i in range(min(num_pages, 15)):
             page_text = doc[i].get_text().strip()
-            text_context += f"--- Page {i+1} ---\n{page_text[:500]}\n"
+            text_context += f"--- Page {i+1} ---\n{page_text[:400]}\n"
+            
+            # Extract thumbnails for the first 8 pages for visual cues (headers/logos)
+            if i < 8:
+                pix = doc[i].get_pixmap(matrix=fitz.Matrix(0.4, 0.4))
+                img_data = base64.b64encode(pix.tobytes("jpg")).decode("utf-8")
+                images_payload.append(img_data)
         doc.close()
     except Exception as e:
         print(f"Error reading PDF for split detection: {e}", flush=True)
@@ -402,7 +411,7 @@ def ai_detect_pdf_splits(file_path, filename):
     
     المطلوب:
     1. حدد ما إذا كان الملف يحتاج لتقسيم إلى وثائق منفصلة.
-    2. لكل وثيقة مستقلة، استخرج موضوعاً دقيقاً ومختصراً (Subject) يعبر عن محتواها.
+    2. لكل وثيقة مستقلة، استخرج موضوعاً دقيقاً ومختصراً (Subject) يعبر عن محتواها (بعنوان الخطاب أو الجواب).
     3. حدد نطاق الصفحات (البداية والنهاية) لكل وثيقة.
     
     أرجع النتيجة بصيغة JSON فقط كقائمة من الكائنات:
@@ -425,22 +434,17 @@ def ai_detect_pdf_splits(file_path, filename):
     """
 
     try:
-        # Multimodal request including the full PDF context if possible
-        base64_data = get_file_base64(file_path)
+        # Build multimodal payload with thumbnails
+        content_list = [{"type": "text", "text": prompt}]
+        for img_b64 in images_payload:
+            content_list.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+            })
+
         payload = {
             "model": ai_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:application/pdf;base64,{base64_data}"},
-                        },
-                    ],
-                }
-            ],
+            "messages": [{"role": "user", "content": content_list}],
             "response_format": {"type": "json_object"},
         }
 
@@ -451,7 +455,7 @@ def ai_detect_pdf_splits(file_path, filename):
                 "Content-Type": "application/json",
             },
             data=json.dumps(payload),
-            timeout=60,
+            timeout=50,
         )
 
         if response.status_code == 200:
@@ -466,6 +470,15 @@ def ai_detect_pdf_splits(file_path, filename):
                     if json_match:
                         return json.loads(json_match.group(0))
                 except: pass
+                
+                # Check for object wrap
+                try:
+                    obj = json.loads(text)
+                    if isinstance(obj, dict) and "documents" in obj: return obj["documents"]
+                    if isinstance(obj, dict) and "splits" in obj: return obj["splits"]
+                    if isinstance(obj, list): return obj
+                except: pass
+                
                 return []
 
             return extract_split_json(raw_content)
@@ -481,8 +494,6 @@ def split_pdf_file(file_path, split_data):
     try:
         doc = fitz.open(file_path)
         base_dir = os.path.dirname(file_path)
-        # Use a temporary prefix to avoid collisions with the final organized name
-        temp_id = int(time.time()) % 1000
         
         for i, item in enumerate(split_data):
             pages = item.get("pages", [])
@@ -501,10 +512,13 @@ def split_pdf_file(file_path, split_data):
                 new_doc.insert_pdf(doc, from_page=start-1, to_page=end-1)
             
             # Sanitize subject for temporary filename
-            subject_raw = item.get("subject", f"part_{i+1}")
+            subject_raw = item.get("subject", f"Document_{i+1}")
             safe_subject = sanitize_folder_name(subject_raw)
-            # Add a prefix to mark it as a split part to avoid matching existing sidecars
-            output_filename = f"split_{temp_id}_{i+1}_{safe_subject}.pdf"
+            
+            # Use the subject as the filename directly as requested
+            # We add a small random part to avoid collisions during the split process in the watch folder
+            rand_id = random.randint(100, 999)
+            output_filename = f"{safe_subject}_{rand_id}.pdf"
             output_path = os.path.join(base_dir, output_filename)
             
             new_doc.save(output_path)
@@ -517,6 +531,7 @@ def split_pdf_file(file_path, split_data):
         print(f"Error splitting PDF: {e}", flush=True)
         
     return split_files
+
 
 
 def mock_ai_analyze(text, filename):
@@ -552,7 +567,88 @@ def sanitize_folder_name(name):
     return cleaned or "غير_محدد"
 
 
-def organize_file_copy(doc_data, base_archive_path):
+def normalize_arabic_for_match(text):
+    """Normalizes Arabic text for comparison by removing stop words and normalizing characters."""
+    if not text:
+        return ""
+    # Normalize to NFC and lowercase
+    text = unicodedata.normalize("NFC", str(text)).lower().strip()
+    
+    # Remove common administrative prefixes/suffixes that might vary
+    stops = ["مشروع", "مصلحة", "وزارة", "قطاع", "إدارة", "شركة", "مكتب", "منطقة", "عام"]
+    # Simple regex to remove these words if they are separate words
+    for s in stops:
+        text = re.sub(rf'\b{s}\b', '', text)
+        
+    # Character normalization:
+    # 1. Alif (أ إ آ -> ا)
+    text = re.sub("[إأآ]", "ا", text)
+    # 2. Taa Marbuta vs Haa (ة -> ه)
+    text = re.sub("ة", "ه", text)
+    # 3. Yaa vs Alif Maksura (ى -> ي)
+    text = re.sub("ى", "ي", text)
+    
+    # Remove extra whitespace
+    text = re.sub(r"\s+", "", text)
+    return text
+
+
+def find_smart_project_match(new_project, year_path, threshold=0.85, use_fuzzy=True):
+    """
+    Tries to find the best existing folder for a project name.
+    1. Check for exact normalized match (Always on).
+    2. Check for substring match (Fuzzy mode).
+    3. Fuzzy match using difflib (Fuzzy mode).
+    """
+    if not os.path.exists(year_path):
+        return sanitize_folder_name(new_project)
+        
+    existing_dirs = [d for d in os.listdir(year_path) if os.path.isdir(os.path.join(year_path, d))]
+    if not existing_dirs:
+        return sanitize_folder_name(new_project)
+        
+    new_norm = normalize_arabic_for_match(new_project)
+    if not new_norm:
+        return sanitize_folder_name(new_project)
+        
+    best_match = None
+    highest_score = 0
+    
+    for d in existing_dirs:
+        d_norm = normalize_arabic_for_match(d)
+        if not d_norm:
+            continue
+            
+        # 1. Exact match after normalization (Always active - handles Taa Marbuta etc.)
+        if new_norm == d_norm:
+            print(f"Smart Match: Exact normalized match found for '{new_project}' -> '{d}'", flush=True)
+            return d
+            
+        # If fuzzy matching is disabled, skip deeper checks
+        if not use_fuzzy:
+            continue
+
+        # 2. Core Substring match: If one is a significant part of the other
+        if len(new_norm) > 3 and len(d_norm) > 3:
+            if new_norm in d_norm or d_norm in new_norm:
+                print(f"Smart Match: Substring match found for '{new_project}' -> '{d}'", flush=True)
+                return d
+        
+        # 3. Fuzzy Score
+        score = difflib.SequenceMatcher(None, new_norm, d_norm).ratio()
+        if score > highest_score:
+            highest_score = score
+            best_match = d
+            
+    # If a very high fuzzy score is found, use it
+    if use_fuzzy and highest_score >= threshold:
+        print(f"Smart Match: Fuzzy match found for '{new_project}' -> '{best_match}' (score: {highest_score:.2f})", flush=True)
+        return best_match
+        
+    return sanitize_folder_name(new_project)
+
+
+def organize_file_copy(doc_data, base_archive_path, smart_match=True):
     """
     Creates a hierarchical copy of the file: Year / Project / File
     هيكل المجلدات: السنة / المشروع / الملف  (بدون مجلد الموضوع)
@@ -569,10 +665,16 @@ def organize_file_copy(doc_data, base_archive_path):
 
         # اسم المشروع فقط — بدون مجلد الموضوع (safe handling for None)
         project_raw = doc_data.get("project") or "غير_محدد"
-        project = sanitize_folder_name(project_raw)
+        
+        # بناء مسار السنة أولاً للبحث فيه عن مجلدات مطابقة
+        year_dir = os.path.join(base_archive_path, year)
+        os.makedirs(year_dir, exist_ok=True)
+        
+        # استخدام البحث الذكي عن المجلد
+        project = find_smart_project_match(project_raw, year_dir, use_fuzzy=smart_match)
 
         # بناء المسار: السنة / المشروع
-        target_dir = os.path.join(base_archive_path, year, project)
+        target_dir = os.path.join(year_dir, project)
         os.makedirs(target_dir, exist_ok=True)
 
         # استخراج اسم الملف الجديد من "الموضوع"
@@ -627,7 +729,7 @@ def organize_file_copy(doc_data, base_archive_path):
     return None
 
 
-def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None, split_pdf=False):
+def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None, split_pdf=False, smart_match=True):
     """
     1. Extracts text via OCR or basic text extraction
     2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
@@ -700,7 +802,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
                 # Process each part individually
                 for part in parts:
                     print(f"Analyzing split part: {os.path.basename(part)}", flush=True)
-                    process_file(part, output_folder, skip_ai=skip_ai, force_reprocess=force_reprocess, split_pdf=False)
+                    process_file(part, output_folder, skip_ai=skip_ai, force_reprocess=force_reprocess, split_pdf=False, smart_match=smart_match)
                 
                 report_status("status_idle", 100)
                 return None # Finished processing parts
@@ -772,7 +874,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
 
         # Perform Hierarchical Organization: Year / Project / File
         report_status("status_organizing", 90, doc_id=file_id)
-        organized_path = organize_file_copy(doc_data, output_folder)
+        organized_path = organize_file_copy(doc_data, output_folder, smart_match=smart_match)
         if organized_path:
             doc_data["file_path"] = organized_path
             doc_data["file"] = os.path.basename(organized_path)

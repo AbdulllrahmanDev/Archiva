@@ -275,6 +275,14 @@
             <div class="step-icon-wrapper"></div>
             <div class="step-label"></div>
         </div>
+        
+        <!-- Force Stop Button -->
+        <button id="force-stop-btn" class="ml-4 p-2 bg-error/10 hover:bg-error/20 text-error rounded-full transition-all flex items-center justify-center group" title="Force Stop">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                <path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/>
+            </svg>
+            <span class="max-w-0 overflow-hidden whitespace-nowrap group-hover:max-w-xs group-hover:ml-2 text-[10px] font-black uppercase tracking-widest transition-all duration-300" id="stop-label">Stop</span>
+        </button>
     </div>
 
     <!-- Minimalist Feedback Toast -->
@@ -386,9 +394,31 @@
                     </div>
                 </div>
 
+                <!-- Smart Project Matching Section -->
+                <div class="pt-2">
+                    <div class="p-5 rounded-[2rem] bg-surface-container-low/40 border border-outline-variant/10 space-y-4">
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex flex-col gap-1 flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-3.5 h-3.5 text-primary flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                                    </svg>
+                                    <p id="smart-project-label" class="text-xs font-bold text-on-surface">الربط الذكي للمشاريع</p>
+                                </div>
+                                <p id="smart-project-desc" class="text-[9px] text-on-surface-variant/50 font-label leading-relaxed ps-5">تجميع المشاريع المتشابهة تلقائياً</p>
+                            </div>
+                            <button id="smart-project-toggle"
+                                class="toggle-switch off"
+                                role="switch" aria-checked="false" type="button">
+                                <div class="toggle-thumb"></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Footer -->
                 <div class="flex flex-col items-center gap-2 pt-2 pb-2">
-                    <span class="text-[10px] font-black text-on-surface-variant/40 tracking-[0.1em]">Archiva v1.2.8</span>
+                    <span class="text-[10px] font-black text-on-surface-variant/40 tracking-[0.1em]">Archiva v1.2.9</span>
                     <a href="#" id="dev-github-link" class="text-[10px] font-bold text-primary/60 hover:text-primary transition-all">By Abdulrahman</a>
                 </div>
             </div>

@@ -62,7 +62,7 @@
     "electron-builder": "^26.8.1"
   },
   "dependencies": {
-    "@openrouter/sdk": "^0.12.7",
+    "@openrouter/sdk": "^0.12.19",
     "dotenv": "^17.4.2",
     "electron-reload": "^2.0.0-alpha.1",
     "marked": "^18.0.0",

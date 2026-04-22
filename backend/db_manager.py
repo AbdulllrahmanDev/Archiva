@@ -199,6 +199,15 @@ def get_document_by_sha256(sha256):
     conn.close()
     return dict(row) if row else None
 
+def get_document_status(doc_id):
+    """Returns the status of a document by its ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT status FROM documents WHERE id = ?', (doc_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
 def delete_document(doc_id):
     """Deletes a document record from the database by ID."""
     conn = get_connection()

@@ -165,6 +165,10 @@ const i18n = {
         step_analyze: "AI Analysis",
         step_organize: "Organize",
         step_ready: "Ready",
+        smart_project_label: "Smart Project Matching",
+        smart_project_desc: "Automatically group similar projects (e.g., Cairo water vs Cairo sewage)",
+        smart_project_enabled_toast: "Smart Project Matching enabled.",
+        smart_project_disabled_toast: "Smart Project Matching disabled.",
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -241,6 +245,11 @@ const i18n = {
         pdf_split_desc: "فصل ملفات PDF التي تحتوي على عدة مشاريع تلقائياً",
         pdf_split_enabled_toast: "تم تفعيل خاصية فصل الملفات.",
         pdf_split_disabled_toast: "تم إيقاف خاصية فصل الملفات.",
+        smart_project_label: "الربط الذكي للمشاريع",
+        smart_project_desc: "تجميع المشاريع المتشابهة تلقائياً (مثل مياه القاهرة وصرف القاهرة)",
+        smart_project_enabled_toast: "تم تفعيل الربط الذكي للمشاريع.",
+        smart_project_disabled_toast: "تم إيقاف الربط الذكي للمشاريع.",
+        stop_label: "إيقاف إجباري",
     }
 };
 
@@ -296,6 +305,15 @@ function updateSettingsUI() {
     const pdfSplitDesc = document.getElementById('pdf-split-desc');
     if (pdfSplitLabel) pdfSplitLabel.innerText = t('pdf_split_label');
     if (pdfSplitDesc) pdfSplitDesc.innerText = t('pdf_split_desc');
+
+    // Smart Project UI
+    const smartProjectLabel = document.getElementById('smart-project-label');
+    const smartProjectDesc = document.getElementById('smart-project-desc');
+    if (smartProjectLabel) smartProjectLabel.innerText = t('smart_project_label');
+    if (smartProjectDesc) smartProjectDesc.innerText = t('smart_project_desc');
+
+    const stopLabel = document.getElementById('stop-label');
+    if (stopLabel) stopLabel.innerText = t('stop_label');
 
     refreshStorageDisplay();
     updateSegmentedIndicators();
@@ -487,7 +505,7 @@ const getViews = () => ({
                         </button>
 
                         <div class="flex items-center gap-4">
-                             <span class="text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant/40">Archiva Ai 4.0</span>
+                             <span class="text-[9px] font-bold uppercase tracking-[0.2em] text-on-surface-variant/40">Archiva Ai 2.5</span>
                              <button id="new-chat-btn" class="p-2 bg-primary text-white rounded-xl shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center justify-center" title="${t('new_chat')}" type="button">
                                 ${getIcon('edit_square', 'sm')}
                              </button>
@@ -2341,9 +2359,9 @@ function setPdfSplitUI(enabled) {
 }
 
 async function initPdfSplitToggle() {
-    if (!window.api || !window.api.getPdfSplitStatus) return;
+    if (!window.api || !window.api.getPDFSplitStatus) return;
     try {
-        const status = await window.api.getPdfSplitStatus();
+        const status = await window.api.getPDFSplitStatus();
         setPdfSplitUI(status.enabled);
     } catch (e) {
         console.error('Failed to load PDF split status:', e);
@@ -2361,7 +2379,7 @@ if (pdfSplitToggleBtn) {
         pdfSplitToggleBtn.style.opacity = '0.7';
 
         try {
-            const result = await window.api.togglePdfSplit(nextState);
+            const result = await window.api.togglePDFSplit(nextState);
             if (result && result.success) {
                 setPdfSplitUI(result.enabled);
                 const toastKey = result.enabled
@@ -2382,6 +2400,98 @@ if (pdfSplitToggleBtn) {
 }
 
 initPdfSplitToggle();
+
+
+// ============================================================
+// SMART PROJECT MATCHING TOGGLE LOGIC
+// ============================================================
+
+let _smartProjectEnabled = false;
+
+function setSmartProjectUI(enabled) {
+    _smartProjectEnabled = enabled;
+    const toggleBtn = document.getElementById('smart-project-toggle');
+    if (!toggleBtn) return;
+
+    toggleBtn.classList.toggle('on', enabled);
+    toggleBtn.classList.toggle('off', !enabled);
+    toggleBtn.setAttribute('aria-checked', String(enabled));
+}
+
+async function initSmartProjectToggle() {
+    if (!window.api || !window.api.getSmartProjectStatus) return;
+    try {
+        const status = await window.api.getSmartProjectStatus();
+        setSmartProjectUI(status.enabled);
+    } catch (e) {
+        console.error('Failed to load Smart Project status:', e);
+        setSmartProjectUI(true); // Default: enabled
+    }
+}
+
+const smartProjectToggleBtn = document.getElementById('smart-project-toggle');
+if (smartProjectToggleBtn) {
+    smartProjectToggleBtn.addEventListener('click', async () => {
+        const nextState = !_smartProjectEnabled;
+        setSmartProjectUI(nextState);
+
+        smartProjectToggleBtn.disabled = true;
+        smartProjectToggleBtn.style.opacity = '0.7';
+
+        try {
+            const result = await window.api.toggleSmartProject(nextState);
+            if (result && result.success) {
+                setSmartProjectUI(result.enabled);
+                const toastKey = result.enabled
+                    ? 'smart_project_enabled_toast'
+                    : 'smart_project_disabled_toast';
+                showToast(toastKey, {}, 4000);
+            } else {
+                setSmartProjectUI(!nextState);
+            }
+        } catch (e) {
+            console.error('Failed to toggle Smart Project matching:', e);
+            setSmartProjectUI(!nextState);
+        } finally {
+            smartProjectToggleBtn.disabled = false;
+            smartProjectToggleBtn.style.opacity = '1';
+        }
+    });
+}
+
+// ============================================================
+// FORCE STOP LOGIC
+// ============================================================
+
+const forceStopBtn = document.getElementById('force-stop-btn');
+if (forceStopBtn) {
+    forceStopBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const confirmed = await showConfirmModal(
+            t('stop_label'),
+            currentLang === 'ar' 
+                ? "هل أنت متأكد من إيقاف العملية الحالية؟ سيتم إنهاء تحليل الذكاء الاصطناعي فوراً."
+                : "Are you sure you want to STOP the current process? This will terminate the AI analysis immediately.",
+            'error'
+        );
+        
+        if (confirmed) {
+            forceStopBtn.disabled = true;
+            forceStopBtn.style.opacity = '0.5';
+            const res = await window.api.stopBackend();
+            if (res.success) {
+                showToast('system_idle');
+                const pipeline = document.getElementById('pipeline-visualizer');
+                if (pipeline) pipeline.classList.remove('active');
+                // Force a small delay then reload to clean up all UI states
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                forceStopBtn.disabled = false;
+                forceStopBtn.style.opacity = '1';
+            }
+        }
+    };
+}
 
 const scrollToTopBtn = document.getElementById('scroll-to-top-btn');
 

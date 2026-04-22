@@ -38,6 +38,13 @@ contextBridge.exposeInMainWorld('api', {
     toggleAutoAnalysis: (enabled) => ipcRenderer.invoke('toggle-auto-analysis', enabled),
 
     // PDF Split Toggle
-    getPdfSplitStatus: () => ipcRenderer.invoke('get-pdf-split-status'),
-    togglePdfSplit: (enabled) => ipcRenderer.invoke('toggle-pdf-split', enabled)
+    getPDFSplitStatus: () => ipcRenderer.invoke('get-pdf-split-status'),
+    togglePDFSplit: (enabled) => ipcRenderer.invoke('toggle-pdf-split', enabled),
+    
+    // Smart Project Matching
+    getSmartProjectStatus: () => ipcRenderer.invoke('get-smart-project-status'),
+    toggleSmartProject: (enabled) => ipcRenderer.invoke('toggle-smart-project', enabled),
+    
+    // Force Stop
+    stopBackend: () => ipcRenderer.invoke('stop-backend')
 });

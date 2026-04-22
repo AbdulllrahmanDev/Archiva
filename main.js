@@ -2,15 +2,11 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, shell, nativeTheme } = requir
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { loadEncryptedEnv } = require('./env-crypto');
-const envPathEnc = path.join(__dirname, '.env.enc');
+const { OpenRouter } = require("@openrouter/sdk");
 const envPathPlain = path.join(__dirname, '.env');
 
-if (!loadEncryptedEnv(envPathEnc)) {
-    // Fallback to plain .env for development
-    if (fs.existsSync(envPathPlain)) {
-        require('dotenv').config({ path: envPathPlain });
-    }
+if (fs.existsSync(envPathPlain)) {
+    require('dotenv').config({ path: envPathPlain });
 }
 
 
@@ -41,6 +37,8 @@ let db;
 let autoAnalysisEnabled = true;
 let autoAnalysisActivatedAt = null;
 let pdfSplitEnabled = false;
+let smartProjectMatchingEnabled = true;
+let activeProcesses = new Set();
 
 function loadAutoAnalysisConfig() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
@@ -68,8 +66,10 @@ function loadAutoAnalysisConfig() {
 
     autoAnalysisActivatedAt = config.autoAnalysisActivatedAt || null;
     pdfSplitEnabled = config.pdfSplitEnabled !== false; // Default true
+    smartProjectMatchingEnabled = config.smartProjectMatchingEnabled !== false; // Default true
     console.log(`Auto-Analysis: ${autoAnalysisEnabled ? 'ENABLED' : 'DISABLED'}, ActivatedAt: ${autoAnalysisActivatedAt || 'N/A'}`);
     console.log(`PDF Splitting: ${pdfSplitEnabled ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`Smart Project Matching: ${smartProjectMatchingEnabled ? 'ENABLED' : 'DISABLED'}`);
 }
 
 function initStorage() {
@@ -205,6 +205,7 @@ function startBackend() {
             AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
             AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
             PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0',
+            SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
             ARCHIVA_WATCH_FOLDER: watchFolder
         }
     });
@@ -480,6 +481,39 @@ ipcMain.handle('update-document', async (event, id, fields) => {
     });
 });
 
+ipcMain.handle('stop-backend', async () => {
+    console.log('[FORCE STOP] Terminating all active processes...');
+    try {
+        // 1. Kill the main watcher process
+        if (pythonProcess) {
+            pythonProcess.kill('SIGTERM');
+            pythonProcess = null;
+        }
+
+        // 2. Kill all manual analysis processes
+        for (const proc of activeProcesses) {
+            try { proc.kill('SIGTERM'); } catch(e) {}
+        }
+        activeProcesses.clear();
+
+        // 3. Reset any 'processing' status in the DB to 'stopped' so they are ignored on restart
+        await new Promise((resolve) => {
+            db.run('UPDATE documents SET status = ? WHERE status = ?', ['stopped', 'processing'], () => {
+                sendUpdateToRenderer();
+                resolve();
+            });
+        });
+
+        // 4. Restart the main watcher process
+        startBackend();
+        
+        return { success: true };
+    } catch (err) {
+        console.error('Force stop error:', err);
+        return { success: false, error: err.message };
+    }
+});
+
 ipcMain.handle('reprocess-document', async (event, id, filePath) => {
     return new Promise((resolve) => {
         // 1. Reset the status in DB to trigger UI spinner
@@ -510,6 +544,9 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
                     }
                 });
+                
+                activeProcesses.add(pyProcess);
+                pyProcess.on('exit', () => activeProcesses.delete(pyProcess));
 
                 pyProcess.stdout.on('data', (d) => {
                     const lines = d.toString().split('\n');
@@ -618,6 +655,8 @@ ipcMain.handle('ai-chat', async (event, messages) => {
     }
 
     try {
+        const supportsVision = ['gemini', 'gpt-4o', 'claude-3', 'pixtral', 'llava', 'vision', 'qwen-vl'].some(m => model.toLowerCase().includes(m));
+
         const processedMessages = await Promise.all(messages.map(async msg => {
             let contentArray = [];
             
@@ -625,7 +664,7 @@ ipcMain.handle('ai-chat', async (event, messages) => {
                 contentArray.push({ type: 'text', text: msg.content });
             }
 
-            if (msg.attachments && msg.attachments.length > 0) {
+            if (supportsVision && msg.attachments && msg.attachments.length > 0) {
                 for (const attachment of msg.attachments) {
                     const ext = path.extname(attachment.path).toLowerCase();
                     try {
@@ -654,27 +693,29 @@ ipcMain.handle('ai-chat', async (event, messages) => {
             return { role: msg.role, content: contentArray };
         }));
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://archiva-desktop.app",
-                "X-Title": "Archiva Intelligence Engine"
-            },
-            body: JSON.stringify({
+        const openrouter = new OpenRouter({ apiKey: apiKey });
+        
+        const stream = await openrouter.chat.send({
+            chatRequest: {
                 model: model,
-                messages: processedMessages
-            })
+                messages: processedMessages,
+                stream: true
+            }
         });
 
-        const data = await response.json();
-        
-        if (data.error) {
-            return { error: data.error.message || 'API Error' };
+        let responseText = "";
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                responseText += content;
+            }
+            // Usage information comes in the final chunk
+            if (chunk.usage) {
+                console.log("\nReasoning tokens:", chunk.usage.reasoningTokens);
+            }
         }
 
-        return { text: data.choices[0].message.content };
+        return { text: responseText };
 
     } catch (err) {
         console.error(err);
@@ -755,6 +796,9 @@ ipcMain.handle('import-folder', async (event, folderPath) => {
                 AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
             }
         });
+
+        activeProcesses.add(importProc);
+        importProc.on('exit', () => activeProcesses.delete(importProc));
 
         let buffer = '';
         importProc.stdout.on('data', (data) => {
@@ -867,18 +911,46 @@ ipcMain.handle('toggle-pdf-split', async (event, enabled) => {
     return { success: true, enabled };
 });
 
+ipcMain.handle('get-smart-project-status', async () => {
+    return { enabled: smartProjectMatchingEnabled };
+});
+
+ipcMain.handle('toggle-smart-project', async (event, enabled) => {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+    }
+
+    config.smartProjectMatchingEnabled = enabled;
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    } catch (e) {
+        console.error('Error saving Smart Project config:', e);
+        return { success: false, error: e.message };
+    }
+
+    smartProjectMatchingEnabled = enabled;
+    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, pdfSplitEnabled, enabled);
+
+    console.log(`Smart Project Matching toggled: ${enabled ? 'ENABLED' : 'DISABLED'}`);
+    return { success: true, enabled };
+});
+
+
 /**
  * Write control sentinel files into the watch folder.
  * watcher.py polls these files to know the current auto-analysis state.
  * No backend restart needed — state change takes effect within ~2 seconds.
  */
-function writeSentinelFiles(enabled, activatedAt, splitEnabled) {
+function writeSentinelFiles(enabled, activatedAt, splitEnabled, smartMatchEnabled) {
     if (!watchFolder || !fs.existsSync(watchFolder)) return;
 
     const sentinelDir  = path.join(watchFolder, '.archiva');
     const enabledFile  = path.join(sentinelDir, 'auto_analysis_enabled');
     const tsFile       = path.join(sentinelDir, 'activation_timestamp');
     const splitFile    = path.join(sentinelDir, 'pdf_split_enabled');
+    const smartFile    = path.join(sentinelDir, 'smart_project_matching');
 
     try {
         if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
@@ -895,7 +967,10 @@ function writeSentinelFiles(enabled, activatedAt, splitEnabled) {
         // PDF Split sentinel
         fs.writeFileSync(splitFile, splitEnabled ? '1' : '0', 'utf8');
 
-        console.log(`Sentinel files updated: auto=${enabled}, ts=${activatedAt || 'N/A'}, split=${splitEnabled}`);
+        // Smart Project Matching sentinel
+        fs.writeFileSync(smartFile, smartMatchEnabled ? '1' : '0', 'utf8');
+
+        console.log(`Sentinel files updated: auto=${enabled}, ts=${activatedAt || 'N/A'}, split=${splitEnabled}, smart=${smartMatchEnabled}`);
     } catch (e) {
         console.error('Error writing sentinel files:', e);
     }
