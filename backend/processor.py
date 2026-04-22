@@ -481,7 +481,8 @@ def split_pdf_file(file_path, split_data):
     try:
         doc = fitz.open(file_path)
         base_dir = os.path.dirname(file_path)
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        # Use a temporary prefix to avoid collisions with the final organized name
+        temp_id = int(time.time()) % 1000
         
         for i, item in enumerate(split_data):
             pages = item.get("pages", [])
@@ -499,15 +500,13 @@ def split_pdf_file(file_path, split_data):
                 end = min(len(doc), pages[-1])
                 new_doc.insert_pdf(doc, from_page=start-1, to_page=end-1)
             
-            # Sanitize subject for filename
-            safe_subject = sanitize_folder_name(item.get("subject", f"part_{i+1}"))
-            output_filename = f"{base_name}_{safe_subject}.pdf"
+            # Sanitize subject for temporary filename
+            subject_raw = item.get("subject", f"part_{i+1}")
+            safe_subject = sanitize_folder_name(subject_raw)
+            # Add a prefix to mark it as a split part to avoid matching existing sidecars
+            output_filename = f"split_{temp_id}_{i+1}_{safe_subject}.pdf"
             output_path = os.path.join(base_dir, output_filename)
             
-            # Prevent collisions
-            if os.path.exists(output_path):
-                output_path = os.path.join(base_dir, f"{base_name}_{safe_subject}_{int(time.time())%1000}.pdf")
-
             new_doc.save(output_path)
             new_doc.close()
             split_files.append(output_path)
@@ -684,16 +683,26 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
                 # Move original to .original folder to avoid reprocessing and keep it safe
                 original_dir = os.path.join(output_folder, ".original")
                 os.makedirs(original_dir, exist_ok=True)
-                shutil.move(file_path, os.path.join(original_dir, file_name))
+                dest_original = os.path.join(original_dir, file_name)
+                
+                # Collision handling for backup
+                if os.path.exists(dest_original):
+                    dest_original = os.path.join(original_dir, f"{int(time.time())}_{file_name}")
+                
+                shutil.move(file_path, dest_original)
+                print(f"Original file moved to backup: {dest_original}", flush=True)
                 
                 # Delete original record from DB if it exists (created by main.js process-uploads)
                 if doc_id:
                     print(f"Deleting original record for split file: {doc_id}", flush=True)
                     delete_document(doc_id)
 
-                # Process each part
+                # Process each part individually
                 for part in parts:
+                    print(f"Analyzing split part: {os.path.basename(part)}", flush=True)
                     process_file(part, output_folder, skip_ai=skip_ai, force_reprocess=force_reprocess, split_pdf=False)
+                
+                report_status("status_idle", 100)
                 return None # Finished processing parts
 
     print(f"Processing: {file_path}", flush=True)

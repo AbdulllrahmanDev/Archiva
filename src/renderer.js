@@ -2,10 +2,7 @@
 const viewport = document.getElementById('app-viewport');
 const insightRail = document.getElementById('insight-rail');
 const railContent = document.getElementById('rail-content');
-const statusToast = document.getElementById('status-toast');
-const statusText = document.getElementById('status-text');
-const progressBar = document.getElementById('progress-bar');
-const progressContainer = document.getElementById('progress-container');
+const pipelineVisualizer = document.getElementById('pipeline-visualizer');
 
 let documents = [];
 let pendingFiles = [];
@@ -45,7 +42,10 @@ const SVG_ICONS = {
     light_mode: 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.42 0s.39-1.03 0-1.42L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.42 0s.39-1.03 0-1.42l-1.06-1.06zm1.06-12.37a.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.42s1.03.39 1.42 0l1.06-1.06c.39-.39.39-1.03 0-1.42zm-12.37 12.37a.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.42s1.03.39 1.42 0l1.06-1.06c.39-.39.39-1.03 0-1.42z',
     dark_mode: 'M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z',
     content_copy: 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z',
-    check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'
+    check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+    folder_managed: 'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 10H6v-2h12v2zm0-4H6v-2h12v2z',
+    task_alt: 'M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z',
+    sync: 'M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'
 };
 
 function getIcon(name, classes = "") {
@@ -69,6 +69,24 @@ function copyToClipboard(text, btnElement) {
     }).catch(err => {
         console.error('Failed to copy: ', err);
     });
+}
+
+function showToast(key, data = {}, duration = 3000) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'px-8 py-4 bg-on-surface text-background rounded-2xl shadow-2xl text-xs font-bold uppercase tracking-wider animate-scale-up border border-white/5';
+    toast.innerText = t(key, data);
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'scale(0.9) translateY(-10px)';
+        toast.style.transition = 'all 0.5s ease';
+        setTimeout(() => toast.remove(), 500);
+    }, duration);
 }
 
 const i18n = {
@@ -143,6 +161,10 @@ const i18n = {
         pdf_split_desc: "Automatically split PDFs containing multiple documents",
         pdf_split_enabled_toast: "PDF Splitting enabled.",
         pdf_split_disabled_toast: "PDF Splitting disabled.",
+        step_upload: "Upload",
+        step_analyze: "AI Analysis",
+        step_organize: "Organize",
+        step_ready: "Ready",
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -151,7 +173,7 @@ const i18n = {
         confirm_archival: "تأكيد الأرشفة", clear_list: "مسح القائمة", remove: "حذف",
         intel_library: "أرشيف المحتوى", archive: "الأرشيف", list: "قائمة", grid: "شبكة",
         insights_dashboard: "لوحة التفاصيل", global_assets: "إجمالي الملفات", status: "الحالة", live_engine: "محرك مباشر",
-        back_to_insights: "العودة للتفاصيل", back_to_search: "العودة للبحث",
+        back_to_insights: "العودة", back_to_search: "العودة",
         intel_summary: "ملخص المحتوى", open_file: "فتح الملف", open_folder: "فتح المجلد", export: "تصدير",
         recent_files: "أحدث الملفات",
         last_analyzed: "آخر تحليل", action_control: "التحكم",
@@ -198,6 +220,10 @@ const i18n = {
         re_analyze_msg: "هل تريد إعادة تحليل هذا المستند باستخدام ذكاء Archiva آلياً؟",
         today: "اليوم",
         yesterday: "أمس",
+        step_upload: "رفع الملف",
+        step_analyze: "التحليل الذكي",
+        step_organize: "التنظيم",
+        step_ready: "جاهز",
         this_week: "آخر 7 أيام",
         this_month: "في وقت سابق من هذا الشهر",
         older: "قديم جداً",
@@ -501,6 +527,7 @@ function updateLayoutDirection() {
     viewsInitialized = false;
     switchView(currentView);
     moveNavIndicator(currentView);
+    updatePipelineUI();
 }
 
 function setLanguage(lang) {
@@ -566,18 +593,8 @@ function confirmAction(titleKey, msgKey, type = 'error') {
     });
 }
 
-function showToast(msgKey, data = {}, duration = 3000) {
-    if (!statusText || !statusToast) return;
-    statusText.innerText = t(msgKey, data);
-    statusToast.style.opacity = '1';
-    statusToast.style.pointerEvents = 'auto';
-    if (duration > 0) {
-        setTimeout(() => {
-            statusToast.style.opacity = '0';
-            statusToast.style.pointerEvents = 'none';
-        }, duration);
-    }
-}
+// Toast notification logic is handled at the top of the file.
+
 
 function moveNavIndicator(viewName) {
     const btn = document.getElementById(`nav-${viewName}`);
@@ -1600,27 +1617,37 @@ async function confirmUploads() {
 
     if (confirmBtn) confirmBtn.disabled = true;
     if (cancelBtn) cancelBtn.disabled = true;
-    if (mainUploadBtn) mainUploadBtn.classList.add('btn-loading');
-    if (iconContainer) {
-        iconContainer.innerHTML = getIcon('add', 'xl');
-    }
+    // Removed loading state logic as per user request
 
     console.log("Archive sequence started for", pendingFiles.length, "files");
-    showToast('archiving_msg', { count: pendingFiles.length }, 0);
+    // Removed showToast as per user request
+
+    // Immediate UI feedback: Activate pipeline step 1
+    const pipeline = document.getElementById('pipeline-visualizer');
+    if (pipeline) {
+        resetPipeline();
+        updatePipelineUI();
+        pipeline.classList.remove('pipeline-exit', 'success');
+        pipeline.classList.add('active');
+        setStepActive('step-upload');
+    }
 
     try {
         const result = await window.api.processUploads(pendingFiles, forceAiForNextUpload);
         console.log("Backend process-uploads result:", result);
 
         if (result && result.success) {
-            showToast("staged_msg", {}, 4000);
+            // Removed showToast("staged_msg") as per user request
+            
             // Reset the add view cleanly — shows '+' button again
             resetAddView();
-            // Show the 'View Library' shortcut in the toast
+            
+            // Show the 'View Library' shortcut in the toast (if any container exists)
             const statusActions = document.getElementById('status-actions');
             if (statusActions) statusActions.classList.remove('hidden');
         } else {
             console.error("Archive failed: Result unsuccessful", result);
+            // Keep error toast for visibility
             showToast("Error processing files.", {}, 3000);
             resetLoadingState();
         }
@@ -1641,7 +1668,8 @@ function resetLoadingState() {
     if (cancelBtn) cancelBtn.disabled = false;
     if (mainUploadBtn) mainUploadBtn.classList.remove('btn-loading');
     if (iconContainer) {
-        iconContainer.innerHTML = getIcon('cloud_upload', 'xl');
+        // Reset back to original '+' icon
+        iconContainer.innerHTML = getIcon('add', 'xl');
     }
 }
 
@@ -2045,57 +2073,89 @@ if (window.api) {
     window.api.onStatusUpdate((status) => {
         if (!status) return;
         const msgKey = typeof status === 'string' ? status : status.msg;
-        const progress = status.progress || 0;
+        const pipeline = document.getElementById('pipeline-visualizer');
+        if (!pipeline) return;
 
-        // Use t() for localized status messages
-        if (statusText) statusText.innerText = t(msgKey, status);
-
-        if (statusToast) {
-            statusToast.style.opacity = '1';
-            statusToast.style.pointerEvents = 'auto';
-            statusToast.style.transform = 'translateX(-50%) scale(1)';
+        // Show pipeline if hidden
+        if (!pipeline.classList.contains('active') && msgKey !== 'status_idle') {
+            resetPipeline();
+            updatePipelineUI(); // Ensure icons and labels are correct
+            pipeline.classList.remove('pipeline-exit', 'success');
+            pipeline.classList.add('active');
         }
 
-        if (status.doc_id) {
-            // Show action buttons if something is being processed
-            const statusActions = document.getElementById('status-actions');
-            if (statusActions) statusActions.classList.remove('hidden');
+        updatePipelineStatus(msgKey);
 
-            // If the processing document is the one open in the rail, refresh it
-            if (activeDocId == status.doc_id) {
-                if (progress === 100 || msgKey.toLowerCase().includes('success')) {
-                    selectDocument(activeDocId);
-                }
-            }
-        }
-
-        if (progress > 0 && progress < 100) {
-            if (progressContainer) progressContainer.classList.remove('hidden');
-            const fill = document.getElementById('progress-bar');
-            if (fill) fill.style.width = `${progress}%`;
-        } else {
-            if (progressContainer) progressContainer.classList.add('hidden');
-            if (['status_idle', 'status_error', 'status_fail'].includes(msgKey) || progress === 100 || progress === 0) {
-                setTimeout(() => {
-                    // Only hide if still idle or finished
-                    if (statusToast && (progress === 100 || progress === 0)) {
-                        statusToast.style.opacity = '0';
-                        statusToast.style.pointerEvents = 'none';
-                        statusToast.style.transform = 'translateX(-50%) scale(0.9)';
-
-                        // Hide actions after toast slides out
-                        setTimeout(() => {
-                            const statusActions = document.getElementById('status-actions');
-                            if (statusActions) statusActions.classList.add('hidden');
-                        }, 700);
-                    }
-                }, 4000);
-            }
+        if (msgKey === 'status_idle' || msgKey === 'sync_complete') {
+            completePipeline();
         }
     });
 
-    // Initialize Status
-    if (statusText) statusText.innerText = t('status_idle');
+    function resetPipeline() {
+        const pipeline = document.getElementById('pipeline-visualizer');
+        pipeline.querySelectorAll('.pipeline-step').forEach(s => s.classList.remove('active', 'completed'));
+        pipeline.querySelectorAll('.pipeline-connector').forEach(c => c.classList.remove('filled'));
+    }
+
+    function updatePipelineStatus(msgKey) {
+        const pipeline = document.getElementById('pipeline-visualizer');
+        
+        // Step 1: Upload / Extracting
+        if (msgKey === 'archiving_msg' || msgKey === 'status_extracting' || msgKey === 'status_ocr') {
+            setStepActive('step-upload');
+        } 
+        // Step 2: AI Analysis
+        else if (msgKey === 'status_ai') {
+            setStepCompleted('step-upload', 'conn-1');
+            setStepActive('step-analyze');
+        }
+        // Step 3: Organizing / Saving
+        else if (msgKey === 'status_organizing' || msgKey === 'status_saving') {
+            setStepCompleted('step-upload', 'conn-1');
+            setStepCompleted('step-analyze', 'conn-2');
+            setStepActive('step-organize');
+        }
+    }
+
+    function setStepActive(stepId) {
+        const step = document.getElementById(stepId);
+        if (step) step.classList.add('active');
+    }
+
+    function setStepCompleted(stepId, connId) {
+        const step = document.getElementById(stepId);
+        const conn = document.getElementById(connId);
+        if (step) {
+            step.classList.remove('active');
+            step.classList.add('completed');
+        }
+        if (conn) conn.classList.add('filled');
+    }
+
+    function completePipeline() {
+        const pipeline = document.getElementById('pipeline-visualizer');
+        setStepCompleted('step-organize', 'conn-3');
+        setStepActive('step-ready');
+        pipeline.classList.add('success');
+        
+        setTimeout(() => {
+            const readyStep = document.getElementById('step-ready');
+            if (readyStep) {
+                readyStep.classList.remove('active');
+                readyStep.classList.add('completed');
+            }
+            
+            // Exit animation
+            setTimeout(() => {
+                pipeline.classList.add('pipeline-exit');
+                setTimeout(() => {
+                    pipeline.classList.remove('active', 'pipeline-exit', 'success');
+                }, 1000);
+            }, 2000);
+        }, 1000);
+    }
+
+    // Initialize Documents
     window.api.getDocuments().then(docs => { documents = docs || []; });
 }
 
@@ -2340,3 +2400,20 @@ if (scrollToTopBtn) {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 }
+
+function updatePipelineUI() {
+    const steps = ['upload', 'analyze', 'organize', 'ready'];
+    steps.forEach(s => {
+        const el = document.getElementById(`step-${s}`);
+        if (el) {
+            const label = el.querySelector('.step-label');
+            const icon = el.querySelector('.step-icon-wrapper');
+            if (label) label.innerText = t(`step_${s}`);
+            if (icon) icon.innerHTML = getIcon(s === 'upload' ? 'cloud_upload' : (s === 'analyze' ? 'auto_awesome' : (s === 'organize' ? 'folder_managed' : 'task_alt')));
+        }
+    });
+}
+
+// Final Initialization
+updateLayoutDirection();
+updatePipelineUI();

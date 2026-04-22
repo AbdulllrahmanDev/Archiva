@@ -332,53 +332,58 @@ ipcMain.handle('select-files', async () => {
 });
 
 ipcMain.handle('process-uploads', async (event, files, forceAi) => {
-    console.log(`Processing ${files.length} uploads... (forceAi: ${forceAi})`);
+    console.log(`[IPC] process-uploads: processing ${files.length} files (forceAi: ${forceAi})`);
     const dateStr = new Date().toISOString().split('T')[0];
 
-    const tasks = files.map(file => {
-        return new Promise((resolve) => {
+    try {
+        const tasks = files.map(async (file) => {
             const destPath = path.join(watchFolder, file.name);
             try {
-                fs.copyFileSync(file.path, destPath);
+                // Use async copy
+                await fs.promises.copyFile(file.path, destPath);
                 
-                // Deterministic ID based on filename hash for perfect matching
                 const crypto = require('crypto');
                 const normalizedName = file.name.normalize('NFC');
                 const fileId = crypto.createHash('sha256').update(normalizedName).digest('hex').substring(0, 24);
                 const ext = path.extname(file.name).toLowerCase();
                 const type = ext === '.pdf' ? 'PDF' : 'IMAGE';
                 
-                // If forceAi is true, write the sentinel file for this specific fileId
                 if (forceAi) {
                     const sentinelDir = path.join(watchFolder, '.archiva');
                     if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
                     fs.writeFileSync(path.join(sentinelDir, `force_ai_${fileId}.tmp`), '1', 'utf8');
                 }
 
-                db.run(`INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing'], 
-                    (err) => {
-                        if (err) {
-                            console.error("Fast Insert Error:", err);
-                            resolve({ success: false, error: err });
-                        } else {
-                            resolve({ success: true });
+                return new Promise((resolve) => {
+                    db.run(
+                        `INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing'],
+                        (err) => {
+                            if (err) {
+                                console.error(`[DB] Insert error for ${file.name}:`, err);
+                                resolve({ success: false, error: err.message });
+                            } else {
+                                resolve({ success: true });
+                            }
                         }
-                    }
-                );
+                    );
+                });
             } catch (err) {
-                console.error(`Error copying file: ${err}`);
-                resolve({ success: false, error: err });
+                console.error(`[FS] Error processing ${file.name}:`, err);
+                return { success: false, error: err.message };
             }
         });
-    });
 
-    const results = await Promise.all(tasks);
-    sendUpdateToRenderer(); // Refresh UI
-    const allSuccessful = results.every(r => r.success);
-    
-    console.log(`Upload sequence complete. All successful: ${allSuccessful}`);
-    return { success: allSuccessful };
+        const results = await Promise.all(tasks);
+        sendUpdateToRenderer(); 
+        const allSuccessful = results.every(r => r.success);
+        
+        console.log(`[IPC] process-uploads complete. Success: ${allSuccessful}`);
+        return { success: allSuccessful };
+    } catch (err) {
+        console.error('[IPC] Fatal error in process-uploads:', err);
+        return { success: false, error: err.message };
+    }
 });
 
 ipcMain.handle('open-path', async (event, pathOrUrl) => {
