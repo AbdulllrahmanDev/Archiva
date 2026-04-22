@@ -3,10 +3,19 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { OpenRouter } = require("@openrouter/sdk");
-const envPathPlain = path.join(__dirname, '.env');
+const { loadEncryptedEnv } = require('./env-crypto.js');
 
+const envPathPlain = path.join(__dirname, '.env');
+const envPathEnc = path.join(__dirname, '.env.enc');
+
+// 1. Try plain .env (Development)
 if (fs.existsSync(envPathPlain)) {
     require('dotenv').config({ path: envPathPlain });
+}
+
+// 2. Try encrypted .env.enc (Production/Bundled)
+if (fs.existsSync(envPathEnc)) {
+    loadEncryptedEnv(envPathEnc);
 }
 
 
