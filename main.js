@@ -48,6 +48,7 @@ let autoAnalysisActivatedAt = null;
 let pdfSplitEnabled = false;
 let smartProjectMatchingEnabled = true;
 let activeProcesses = new Set();
+let isForceStopped = false; // Blocks any Python output after force stop
 
 function loadAutoAnalysisConfig() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
@@ -236,19 +237,29 @@ function startBackend() {
         lines.forEach(line => {
             const trimmed = line.trim();
             if (!trimmed) return;
-            
+
+            // If force-stopped, silently discard ALL output from Python
+            if (isForceStopped) return;
+
             console.log(`Python: ${trimmed}`); // Debug log all python output
 
-            if (trimmed.startsWith('{')) {
+            const jsonMatch = trimmed.match(/\{.*\}/);
+            if (jsonMatch) {
                 try {
-                    const json = JSON.parse(trimmed);
-                    if (json.type === 'status') {
-                        mainWindow.webContents.send('status-update', json); // Send the whole object
+                    const json = JSON.parse(jsonMatch[0]);
+                    if (json.type === 'needs_confirmation') {
+                        mainWindow.webContents.send('ask-project-similarity', {
+                            docData: json.doc_data,
+                            similar: json.similar,
+                            newProject: json.new_project
+                        });
+                        return;
+                    } else if (json.type === 'status') {
+                        mainWindow.webContents.send('status-update', json);
                     } else if (json.type === 'sync_complete') {
-                        console.log(`AI processing complete for doc: ${json.doc_id || 'initial'}. Refreshing UI...`);
-                        sendUpdateToRenderer(); // THIS is what stops the spinner
+                        checkBatchProgress(json.doc_id);
+                        sendUpdateToRenderer();
                     } else if (json.type === 'document_added') {
-                        console.log("Document added by AI:", json.data?.title);
                         sendUpdateToRenderer();
                     } else {
                         sendUpdateToRenderer();
@@ -324,6 +335,27 @@ app.on('before-quit', () => {
 });
 
 // IPC Handlers
+let currentBatch = {
+    total: 0,
+    completedIds: new Set(),
+    active: false
+};
+
+function checkBatchProgress(docId) {
+    if (currentBatch.active && docId) {
+        currentBatch.completedIds.add(docId);
+        const completed = currentBatch.completedIds.size;
+        if (mainWindow) {
+            mainWindow.webContents.send('batch-progress', {
+                total: currentBatch.total,
+                completed: completed,
+                active: completed < currentBatch.total
+            });
+        }
+        if (completed >= currentBatch.total) currentBatch.active = false;
+    }
+}
+
 ipcMain.handle('select-files', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile', 'multiSelections'],
@@ -343,6 +375,18 @@ ipcMain.handle('select-files', async () => {
 
 ipcMain.handle('process-uploads', async (event, files, forceAi) => {
     console.log(`[IPC] process-uploads: processing ${files.length} files (forceAi: ${forceAi})`);
+    
+    currentBatch.total = files.length;
+    currentBatch.completedIds.clear();
+    currentBatch.active = true;
+    if (mainWindow) {
+        mainWindow.webContents.send('batch-progress', {
+            total: currentBatch.total,
+            completed: 0,
+            active: true
+        });
+    }
+
     const dateStr = new Date().toISOString().split('T')[0];
 
     try {
@@ -474,50 +518,219 @@ ipcMain.handle('update-document', async (event, id, fields) => {
     const updates = Object.entries(fields).filter(([k]) => allowedFields.includes(k));
     if (updates.length === 0) return { success: false, error: 'No valid fields' };
 
-    const setClauses = updates.map(([k]) => `${k} = ?`).join(', ');
-    const values = [...updates.map(([, v]) => v), id];
-
     return new Promise((resolve) => {
-        db.run(`UPDATE documents SET ${setClauses} WHERE id = ?`, values, (err) => {
-            if (err) {
-                console.error('Update doc error:', err);
-                resolve({ success: false, error: err.message });
+        db.get(`SELECT * FROM documents WHERE id = ?`, [id], async (err, doc) => {
+            if (err || !doc) return resolve({ success: false, error: err ? err.message : 'Doc not found' });
+            
+            // Check if we need to reorganize
+            let needsReorganize = false;
+            if (fields.subject !== undefined && fields.subject !== doc.subject) needsReorganize = true;
+            if (fields.project !== undefined && fields.project !== doc.project) needsReorganize = true;
+            if (fields.doc_date !== undefined && fields.doc_date !== doc.doc_date) needsReorganize = true;
+            
+            const updatedDoc = { ...doc, ...fields };
+            
+            if (needsReorganize) {
+                // Call the new centralized move logic
+                const result = await organizeFileAndSaveDb(updatedDoc, watchFolder);
+                resolve(result);
             } else {
-                sendUpdateToRenderer();
-                resolve({ success: true });
+                // Just update DB fields
+                const setClauses = updates.map(([k]) => `${k} = ?`).join(', ');
+                const values = [...updates.map(([, v]) => v), id];
+                db.run(`UPDATE documents SET ${setClauses} WHERE id = ?`, values, (err) => {
+                    if (err) {
+                        console.error('Update doc error:', err);
+                        resolve({ success: false, error: err.message });
+                    } else {
+                        // Update JSON inside sidecar
+                        try {
+                            const ext = path.extname(doc.file);
+                            const sidecarPath = doc.file_path.replace(new RegExp(`${ext}$`), '.json');
+                            if (fs.existsSync(sidecarPath)) {
+                                let sidecarData = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+                                Object.assign(sidecarData, fields);
+                                fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
+                            }
+                        } catch(e) { console.error("Error updating sidecar:", e); }
+                        sendUpdateToRenderer();
+                        resolve({ success: true });
+                    }
+                });
             }
         });
     });
 });
 
+ipcMain.handle('confirm-project-similarity', async (event, docData, finalProject) => {
+    // Modify docData to use the final project
+    docData.project = finalProject;
+    return await organizeFileAndSaveDb(docData, watchFolder);
+});
+
+// Centralized logic for moving files and saving to DB/Sidecar
+async function organizeFileAndSaveDb(docData, baseFolder) {
+    const dateStr = docData.doc_date || docData.date_added || "";
+    const year = (dateStr.includes('-') && dateStr.length >= 4) ? dateStr.split('-')[0] : new Date().getFullYear().toString();
+    
+    let projectRaw = (docData.project || "").trim();
+    const unknownProjects = ["", "عام", "غير محدد", "غير_محدد", "n/a", "unknown"];
+    let project = unknownProjects.includes(projectRaw.toLowerCase()) ? "غير_محدد" : projectRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "غير_محدد";
+    
+    const targetDir = path.join(baseFolder, year, project);
+    if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+    }
+    
+    let subjectRaw = (docData.subject || "").trim();
+    const unknownSubjects = ["", "غير محدد", "غير_محدد", "وثيقة_غير_معروفة", "n/a", "unknown"];
+    let cleanSubject = unknownSubjects.includes(subjectRaw.toLowerCase()) ? (path.parse(docData.file).name) : subjectRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "وثيقة_غير_معروفة";
+    
+    const ext = path.extname(docData.file) || '.pdf';
+    let newFilename = `${cleanSubject}${ext}`;
+    let targetPath = path.join(targetDir, newFilename);
+    
+    if (targetPath !== docData.file_path && fs.existsSync(targetPath)) {
+        const uniqueSuffix = Date.now() % 10000;
+        newFilename = `${cleanSubject}_${uniqueSuffix}${ext}`;
+        targetPath = path.join(targetDir, newFilename);
+    }
+    
+    if (targetPath !== docData.file_path && fs.existsSync(docData.file_path)) {
+        try {
+            fs.renameSync(docData.file_path, targetPath);
+            // Move sidecar if exists
+            const oldSidecar = docData.file_path.replace(new RegExp(`${ext}$`), '.json');
+            const newSidecar = targetPath.replace(new RegExp(`${ext}$`), '.json');
+            if (fs.existsSync(oldSidecar)) {
+                fs.renameSync(oldSidecar, newSidecar);
+            }
+            docData.file_path = targetPath;
+            docData.file = newFilename;
+        } catch(e) {
+            console.error("Error moving file:", e);
+        }
+    }
+
+    // Save Sidecar
+    const sidecarPath = docData.file_path.replace(new RegExp(`${ext}$`), '.json');
+    const sidecarData = { ...docData };
+    delete sidecarData.content; // Never store large content in sidecar JSON
+    sidecarData.content_preview = docData.content ? docData.content.substring(0, 500) : "";
+    try {
+        fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
+        if (process.platform === 'win32') {
+            require('child_process').exec(`attrib +h "${sidecarPath}"`, () => {});
+        }
+    } catch(e) { console.error("Error saving sidecar:", e); }
+
+    return new Promise((resolve) => {
+        // Prepare tags
+        const tagsJson = Array.isArray(docData.tags) ? JSON.stringify(docData.tags) : "[]";
+        
+        db.run(
+            `INSERT OR REPLACE INTO documents 
+            (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, intel_card, subject, project, doc_date, version_no) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [docData.id, docData.file, docData.file_path, docData.title, docData.date_added, docData.type, docData.class, docData.area, tagsJson, docData.summary, docData.content || "", docData.sha256 || "", 'ready', docData.intel_card || "", docData.subject, docData.project, docData.doc_date, docData.version_no],
+            (err) => {
+                if (err) console.error("DB Insert error:", err);
+                sendUpdateToRenderer();
+                
+                // Finish syncing status
+                if (mainWindow) {
+                    mainWindow.webContents.send('status-update', { type: "sync_complete", doc_id: docData.id });
+                    mainWindow.webContents.send('status-update', { type: "status_idle", progress: 0 });
+                }
+                
+                checkBatchProgress(docData.id);
+                
+                resolve({ success: !err });
+            }
+        );
+    });
+}
+
 ipcMain.handle('stop-backend', async () => {
     console.log('[FORCE STOP] Terminating all active processes...');
+    
+    // STEP 0: Raise the flag IMMEDIATELY — blocks all Python stdout from reaching UI
+    isForceStopped = true;
+
     try {
         // 1. Kill the main watcher process
-        if (pythonProcess) {
-            pythonProcess.kill('SIGTERM');
+        if (pythonProcess && pythonProcess.pid) {
+            try {
+                if (process.platform === 'win32') {
+                    require('child_process').execSync(`taskkill /pid ${pythonProcess.pid} /T /F`, { stdio: 'ignore' });
+                } else {
+                    pythonProcess.kill();
+                }
+            } catch (e) {
+                console.error('Failed to kill watcher process:', e);
+            }
             pythonProcess = null;
         }
 
         // 2. Kill all manual analysis processes
         for (const proc of activeProcesses) {
-            try { proc.kill('SIGTERM'); } catch(e) {}
+            try {
+                if (process.platform === 'win32' && proc.pid) {
+                    require('child_process').execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore' });
+                } else {
+                    proc.kill();
+                }
+            } catch(e) {}
         }
         activeProcesses.clear();
 
-        // 3. Reset any 'processing' status in the DB to 'stopped' so they are ignored on restart
+        // 3. Get all 'processing' docs BEFORE deleting from DB
+        const processingDocs = await new Promise((resolve) => {
+            db.all('SELECT id, file_path, file FROM documents WHERE status = ?', ['processing'], (err, rows) => {
+                resolve(rows || []);
+            });
+        });
+
+        // 4. Delete the actual files from watchFolder (they haven't been organized yet)
+        for (const doc of processingDocs) {
+            const fileInWatch = path.join(watchFolder, doc.file);
+            if (fs.existsSync(fileInWatch)) {
+                try {
+                    fs.unlinkSync(fileInWatch);
+                    console.log(`[FORCE STOP] Deleted pending file: ${fileInWatch}`);
+                } catch(e) {
+                    console.error(`[FORCE STOP] Could not delete ${fileInWatch}:`, e);
+                }
+            }
+            // Also delete any orphan JSON sidecar next to it
+            const sidecarInWatch = fileInWatch.replace(/\.[^/.]+$/, '.json');
+            if (fs.existsSync(sidecarInWatch)) {
+                try { fs.unlinkSync(sidecarInWatch); } catch(e) {}
+            }
+        }
+
+        // 5. Delete all 'processing' records from DB
         await new Promise((resolve) => {
-            db.run('UPDATE documents SET status = ? WHERE status = ?', ['stopped', 'processing'], () => {
+            db.run('DELETE FROM documents WHERE status = ?', ['processing'], () => {
                 sendUpdateToRenderer();
                 resolve();
             });
         });
 
-        // 4. Restart the main watcher process
+        // 6. Reset batch state
+        currentBatch.active = false;
+        currentBatch.completedIds.clear();
+        currentBatch.total = 0;
+
+        // 7. Reset the flag BEFORE restarting so the new watcher can communicate normally
+        isForceStopped = false;
+
+        // 8. Restart the watcher (clean slate)
         startBackend();
-        
+
         return { success: true };
     } catch (err) {
+        isForceStopped = false; // Always reset on error too
         console.error('Force stop error:', err);
         return { success: false, error: err.message };
     }
@@ -565,7 +778,17 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         if (trimmed.startsWith('{')) {
                             try {
                                 const json = JSON.parse(trimmed);
-                                if (json.type === 'sync_complete') sendUpdateToRenderer();
+                                if (json.type === 'needs_confirmation') {
+                                    mainWindow.webContents.send('ask-project-similarity', {
+                                        docData: json.doc_data,
+                                        similar: json.similar,
+                                        newProject: json.new_project
+                                    });
+                                    return;
+                                } else if (json.type === 'sync_complete') {
+                                    checkBatchProgress(json.doc_id);
+                                    sendUpdateToRenderer();
+                                }
                                 else if (json.type === 'document_added') sendUpdateToRenderer();
                                 else mainWindow.webContents.send('status-update', json);
                             } catch(e) {}

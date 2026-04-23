@@ -242,6 +242,51 @@ def start_watching(folder_path):
     # Initial sync: initialize DB and rebuild index from sidecars (recursive)
     initialize_db()
     rebuild_index_recursive(folder_path)
+
+    # ── Cleanup: Remove orphan JSON sidecars (JSON exists but PDF/image is missing) ──
+    print("Scanning for orphan JSON sidecars...", flush=True)
+    orphans_removed = 0
+    for root, dirs, files in os.walk(folder_path):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        for filename in files:
+            if filename.lower().endswith('.json'):
+                json_path = os.path.join(root, filename)
+                # Find the matching media file
+                base = os.path.splitext(filename)[0]
+                found_media = False
+                for ext in ('.pdf', '.jpg', '.jpeg', '.png', '.webp'):
+                    if os.path.exists(os.path.join(root, base + ext)):
+                        found_media = True
+                        break
+                if not found_media:
+                    try:
+                        os.remove(json_path)
+                        orphans_removed += 1
+                        print(f"Removed orphan sidecar: {json_path}", flush=True)
+                    except Exception as e:
+                        print(f"Could not remove orphan sidecar {json_path}: {e}", flush=True)
+    
+    # Also remove empty project folders (folders with no media files at all)
+    for root, dirs, files in os.walk(folder_path, topdown=False):
+        for d in dirs:
+            if d.startswith('.'):
+                continue
+            dir_path = os.path.join(root, d)
+            try:
+                has_media = any(
+                    f.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.webp'))
+                    for _, _, fs in os.walk(dir_path) for f in fs
+                )
+                if not has_media and not os.listdir(dir_path):
+                    os.rmdir(dir_path)
+                    print(f"Removed empty folder: {dir_path}", flush=True)
+            except Exception:
+                pass
+
+    if orphans_removed:
+        print(f"Cleanup complete: removed {orphans_removed} orphan sidecar(s).", flush=True)
+    else:
+        print("No orphan sidecars found.", flush=True)
     
     # Only scan for unprocessed files if auto-analysis is currently enabled
     if enabled_now:

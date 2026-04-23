@@ -250,6 +250,14 @@
     </aside>
     <!-- Advanced Pipeline Visualizer (Successor to Status Toast) -->
     <div id="pipeline-visualizer">
+        <!-- New Progress Indicator -->
+        <div id="pipeline-progress-meta" class="absolute -top-10 left-0 right-0 flex items-center justify-between px-2 opacity-0 transition-opacity duration-300 pointer-events-none">
+            <div class="flex flex-col gap-1">
+                <span id="pipeline-batch-count" class="text-[10px] font-black uppercase tracking-[0.2em] text-primary"></span>
+            </div>
+            <div id="pipeline-overall-percent" class="text-xs font-black text-on-surface-variant/40 tracking-tighter"></div>
+        </div>
+        
         <div class="pipeline-step" id="step-upload">
             <div class="step-icon-wrapper"></div>
             <div class="step-label"></div>

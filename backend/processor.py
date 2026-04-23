@@ -150,7 +150,7 @@ def real_ai_analyze(text, filename, file_path=None):
     - قد تحتوي الصفحة على ترويسة (Header) بها شعارات وتواريخ وأرقام "ثابتة" للمنظمة.
     - ابحث عن "الموضوع" (Subject) الفعلي داخل نص الوثيقة وليس مجرد أول سطر.
     - ابحث عن "تاريخ الوثيقة" (Document Date) وهو تاريخ صدور الخطاب وليس تاريخ اليوم أو تواريخ عشوائية في الشعارات.
-    - استخرج "المشروع" (Project) الذي تتعلق به الوثيقة إذا ذكر.
+    - استخرج "المشروع" (Project) الذي تتعلق به الوثيقة إذا ذكر. وإذا لم يذكر صراحة، حاول استنتاجه بذكاء من "الموضوع" أو محتوى الوثيقة. وإذا لم تتمكن من استنتاجه نهائياً اكتب 'عام'.
     - استخرج "رقم الصادر/الوارد" كـ version_no.
 
     محتوى النص المستخرج (للمساعدة):
@@ -533,7 +533,6 @@ def split_pdf_file(file_path, split_data):
     return split_files
 
 
-
 def mock_ai_analyze(text, filename):
     """Fallback logic if real AI fails, or if Auto-Analysis is disabled."""
     ext = os.path.splitext(filename)[1].lower()
@@ -545,15 +544,15 @@ def mock_ai_analyze(text, filename):
 
     return {
         "title": readable_title,
-        "subject": "",
-        "project": "",
+        "subject": readable_title,   # FIX: use readable title so file gets moved & renamed
+        "project": "غير_محدد",       # FIX: explicit fallback so organize_file_copy always has a project
         "doc_date": "",
         "version_no": "",
         "type": file_format,
         "class": "أخرى",
         "area": "",
         "tags": [],
-        "summary": f"تمت الإضافة بدون تحليل (الذكاء الاصطناعي مغلق). يرجى التعديل يدوياً.",
+        "summary": "تمت الإضافة بدون تحليل (الذكاء الاصطناعي مغلق). يرجى التعديل يدوياً.",
     }
 
 
@@ -641,9 +640,12 @@ def find_smart_project_match(new_project, year_path, threshold=0.85, use_fuzzy=T
             best_match = d
             
     # If a very high fuzzy score is found, use it
-    if use_fuzzy and highest_score >= threshold:
-        print(f"Smart Match: Fuzzy match found for '{new_project}' -> '{best_match}' (score: {highest_score:.2f})", flush=True)
-        return best_match
+    if highest_score >= threshold:
+        if use_fuzzy:
+            print(f"Smart Match: Fuzzy match found for '{new_project}' -> '{best_match}' (score: {highest_score:.2f})", flush=True)
+            return best_match
+        else:
+            return {"needs_confirmation": True, "similar": best_match, "new": sanitize_folder_name(new_project)}
         
     return sanitize_folder_name(new_project)
 
@@ -651,11 +653,12 @@ def find_smart_project_match(new_project, year_path, threshold=0.85, use_fuzzy=T
 def organize_file_copy(doc_data, base_archive_path, smart_match=True):
     """
     Creates a hierarchical copy of the file: Year / Project / File
-    هيكل المجلدات: السنة / المشروع / الملف  (بدون مجلد الموضوع)
-    وينشئ ملف JSON بالبيانات الأربعة بجانب الملف المنظّم.
+    هيكل المجلدات: السنة / المشروع / الملف
+    - إذا كان الموضوع فارغاً → يُسمى الملف باسمه الأصلي ويُوضع في مجلد 'غير_محدد'
+    - إذا كان المشروع فارغاً أو 'عام' → يُوضع في مجلد 'عام' تحت السنة
     """
     try:
-        # استخراج السنة من تاريخ الوثيقة (safe handling for None)
+        # ── 1. استخراج السنة ───────────────────────────────────────────────
         doc_date = doc_data.get("doc_date") or ""
         year = (
             doc_date.split("-")[0]
@@ -663,56 +666,55 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
             else datetime.datetime.now().strftime("%Y")
         )
 
-        # اسم المشروع فقط — بدون مجلد الموضوع (safe handling for None)
-        project_raw = doc_data.get("project") or "غير_محدد"
-        
-        # بناء مسار السنة أولاً للبحث فيه عن مجلدات مطابقة
-        year_dir = os.path.join(base_archive_path, year)
-        os.makedirs(year_dir, exist_ok=True)
-        
-        # استخدام البحث الذكي عن المجلد
-        project = find_smart_project_match(project_raw, year_dir, use_fuzzy=smart_match)
+        # ── 2. تحديد اسم المشروع مع Fallback واضح ─────────────────────────
+        project_raw = (doc_data.get("project") or "").strip()
 
-        # بناء المسار: السنة / المشروع
-        target_dir = os.path.join(year_dir, project)
-        os.makedirs(target_dir, exist_ok=True)
+        # القيم التي تعني "بلا مشروع محدد"
+        UNKNOWN_PROJECT_VALUES = {"", "عام", "غير محدد", "غير_محدد", "n/a", "unknown"}
+        if project_raw.lower() in UNKNOWN_PROJECT_VALUES:
+            # لا يوجد مشروع محدد → نضع الملف في مجلد 'غير_محدد'
+            project = "غير_محدد"
+            print(f"Organize: No project detected, placing in 'غير_محدد'", flush=True)
+        else:
+            # ── 3. بناء مسار السنة للبحث عن مجلد مطابق ─────────────────────
+            year_dir = os.path.join(base_archive_path, year)
+            os.makedirs(year_dir, exist_ok=True)
+            project = find_smart_project_match(project_raw, year_dir, use_fuzzy=smart_match)
+            if isinstance(project, dict) and project.get("needs_confirmation"):
+                return project
+            print(f"Organize: Project resolved to '{project}' (from '{project_raw}')", flush=True)
 
-        # استخراج اسم الملف الجديد من "الموضوع"
-        subject_raw = doc_data.get("subject") or "وثيقة_غير_معروفة"
-        # تنظيف الموضوع ليكون صالحاً كاسم ملف
-        clean_subject = sanitize_folder_name(subject_raw)
-
-        # الاحتفاظ بالامتد�ير_محدد"
-        project = sanitize_folder_name(project_raw)
-
-        # بناء المسار: السنة / المشروع
+        # ── 4. بناء مسار المجلد الهدف ──────────────────────────────────────
         target_dir = os.path.join(base_archive_path, year, project)
         os.makedirs(target_dir, exist_ok=True)
 
-        # استخراج اسم الملف الجديد من "الموضوع"
-        subject_raw = doc_data.get("subject") or "وثيقة_غير_معروفة"
-        # تنظيف الموضوع ليكون صالحاً كاسم ملف
-        clean_subject = sanitize_folder_name(subject_raw)
+        # ── 5. تحديد اسم الملف الجديد من "الموضوع" ────────────────────────
+        subject_raw = (doc_data.get("subject") or "").strip()
+        UNKNOWN_SUBJECT_VALUES = {"", "غير محدد", "غير_محدد", "وثيقة_غير_معروفة", "n/a", "unknown"}
+        if subject_raw.lower() in UNKNOWN_SUBJECT_VALUES:
+            # لا يوجد موضوع → استخدم اسم الملف الأصلي بدون امتداد
+            original_name = os.path.splitext(doc_data.get("file", "document"))[0]
+            clean_subject = sanitize_folder_name(original_name) or "وثيقة_غير_معروفة"
+            print(f"Organize: No subject detected, using original filename '{clean_subject}'", flush=True)
+        else:
+            clean_subject = sanitize_folder_name(subject_raw)
 
-        # الاحتفاظ بالامتداد الأصلي
+        # ── 6. الاحتفاظ بالامتداد الأصلي ──────────────────────────────────
         ext = os.path.splitext(doc_data.get("file", ".pdf"))[1]
         if not ext:
             ext = ".pdf"
 
-        # بناء اسم الملف الجديد
+        # ── 7. بناء اسم الملف النهائي ──────────────────────────────────────
         new_filename = f"{clean_subject}{ext}"
         target_file_path = os.path.join(target_dir, new_filename)
-        # اسم ملف الـ JSON المرافق
-        json_filename = f"{clean_subject}.json"
 
-        # معالجة تعارض الأسماء (إذا وجد ملف بنفس الموضوع)
+        # ── 8. معالجة تعارض الأسماء ────────────────────────────────────────
         if os.path.exists(target_file_path):
             unique_suffix = int(time.time()) % 10000
             new_filename = f"{clean_subject}_{unique_suffix}{ext}"
             target_file_path = os.path.join(target_dir, new_filename)
-            json_filename = f"{clean_subject}_{unique_suffix}.json"
 
-        # نقل الملف الأصلي بدلاً من نسخه (لعدم تكرار الملفات)
+        # ── 9. نقل الملف الأصلي ────────────────────────────────────────────
         source_path = doc_data.get("file_path")
         if source_path and os.path.exists(source_path):
             if source_path != target_file_path:
@@ -720,11 +722,16 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
                 print(f"File moved to: {target_file_path}", flush=True)
             else:
                 print(f"File already at target: {target_file_path}", flush=True)
+        else:
+            print(f"WARNING: Source file not found: {source_path}", flush=True)
+            return None
 
         return target_file_path
 
     except Exception as e:
         print(f"Error organizing file copy: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
 
     return None
 
@@ -755,21 +762,38 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         except: pass
 
     if not force_reprocess and os.path.exists(sidecar_path):
-        print(
-            f"Smart Skip: Sidecar already exists next to file: {file_name}", flush=True
-        )
+        print(f"Smart Skip: Sidecar already exists next to file: {file_name}", flush=True)
+        # Recover ID if possible to signal completion
+        recovered_id = doc_id
+        if not recovered_id:
+            try:
+                with open(sidecar_path, 'r', encoding='utf-8') as f:
+                    recovered_id = json.load(f).get('id')
+            except: pass
+        
+        if recovered_id:
+            print(json.dumps({"type": "sync_complete", "doc_id": recovered_id}, ensure_ascii=False), flush=True)
+            report_status("status_idle", 100, doc_id=recovered_id)
         return None
 
     # 2. Check content fingerprint (SHA256) in Database (Deeper Skip)
     file_hash = get_file_hash(file_path)
     existing_doc = get_document_by_sha256(file_hash)
+    
+    # Pre-determine file_id for status reporting
+    if doc_id:
+        file_id = doc_id
+    elif existing_doc:
+        file_id = existing_doc.get("id")
+    else:
+        normalized_name = unicodedata.normalize("NFC", file_name)
+        file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+
     if not force_reprocess and existing_doc:
-        # If it exists in DB but not as a sidecar here, it might have been moved
-        # We skip to avoid re-analysis, but could update path if needed
-        print(
-            f"Smart Skip: Document already archived with hash {file_hash[:8]}",
-            flush=True,
-        )
+        print(f"Smart Skip: Document already archived with hash {file_hash[:8]}", flush=True)
+        # Still need to signal completion for UI counters
+        print(json.dumps({"type": "sync_complete", "doc_id": file_id}, ensure_ascii=False), flush=True)
+        report_status("status_idle", 100, doc_id=file_id)
         return None
 
     # 3. PDF Splitting Logic
@@ -875,9 +899,33 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         # Perform Hierarchical Organization: Year / Project / File
         report_status("status_organizing", 90, doc_id=file_id)
         organized_path = organize_file_copy(doc_data, output_folder, smart_match=smart_match)
-        if organized_path:
-            doc_data["file_path"] = organized_path
-            doc_data["file"] = os.path.basename(organized_path)
+        
+        if isinstance(organized_path, dict) and organized_path.get("needs_confirmation"):
+            report_status("needs_confirmation", 90, doc_id=file_id, extra={
+                "doc_data": doc_data,
+                "similar": organized_path["similar"],
+                "new_project": organized_path["new"]
+            })
+            return None # Let Node.js handle it after user confirmation
+
+        # ── Critical: Only proceed if file was successfully organized ──────
+        if not organized_path or not os.path.exists(organized_path):
+            print(f"ERROR: File organization failed or file missing after move: {file_name}. Aborting archival.", flush=True)
+            # Clean up any orphan sidecar that may have been left behind
+            for stray_sidecar in [
+                os.path.splitext(file_path)[0] + ".json",
+                os.path.splitext(organized_path)[0] + ".json" if organized_path else None,
+            ]:
+                if stray_sidecar and os.path.exists(stray_sidecar):
+                    try:
+                        os.remove(stray_sidecar)
+                        print(f"Cleaned up orphan sidecar: {stray_sidecar}", flush=True)
+                    except Exception:
+                        pass
+            return None
+
+        doc_data["file_path"] = organized_path
+        doc_data["file"] = os.path.basename(organized_path)
 
         # Determine final sidecar path (alongside the file, wherever it is)
         current_file_path = doc_data["file_path"]

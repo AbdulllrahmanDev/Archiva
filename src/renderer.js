@@ -169,6 +169,9 @@ const i18n = {
         smart_project_desc: "Automatically group similar projects (e.g., Cairo water vs Cairo sewage)",
         smart_project_enabled_toast: "Smart Project Matching enabled.",
         smart_project_disabled_toast: "Smart Project Matching disabled.",
+        similarity_title: "Project Similarity Match",
+        use_similar_btn: "Use Existing Folder",
+        create_new_btn: "Create New",
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -250,6 +253,9 @@ const i18n = {
         smart_project_enabled_toast: "تم تفعيل الربط الذكي للمشاريع.",
         smart_project_disabled_toast: "تم إيقاف الربط الذكي للمشاريع.",
         stop_label: "إيقاف إجباري",
+        similarity_title: "تشابه في اسم المشروع",
+        use_similar_btn: "استخدام المجلد الموجود",
+        create_new_btn: "إنشاء مجلد جديد",
     }
 };
 
@@ -564,7 +570,7 @@ function toggleSettingsModal(show) {
     }
 }
 
-function confirmAction(titleKey, msgKey, type = 'error') {
+function confirmAction(titleKey, msgKey, type = 'error', customMsg = null, customOk = null, customCancel = null) {
     return new Promise((resolve) => {
         const modal = document.getElementById('confirm-modal');
         const title = document.getElementById('confirm-title');
@@ -578,10 +584,10 @@ function confirmAction(titleKey, msgKey, type = 'error') {
         if (!modal || !title || !message || !okBtn || !cancelBtn) return resolve(false);
 
         title.innerText = t(titleKey);
-        message.innerText = t(msgKey);
+        message.innerText = customMsg || t(msgKey);
 
-        okBtn.innerText = t('confirm_btn');
-        cancelBtn.innerText = t('cancel');
+        okBtn.innerText = customOk ? t(customOk) : t('confirm_btn');
+        cancelBtn.innerText = customCancel ? t(customCancel) : t('cancel');
 
         // Apply Theme
         if (type === 'ai') {
@@ -1700,9 +1706,11 @@ function renderPendingList() {
         return `
             <div class="px-8 py-4 flex items-center justify-between group">
                 <div class="flex items-center gap-4">
-                    <div class="text-primary opacity-40">
+                    <button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest/50 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer border border-outline-variant/10 shadow-sm" 
+                            onclick="window.api.openPath(\`${file.path.replace(/\\/g, '\\\\')}\`)" 
+                            title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
                         ${getIcon(icon)}
-                    </div>
+                    </button>
                     <div>
                         <p class="text-sm font-semibold text-on-surface truncate max-w-md">${file.name}</p>
                         <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-tight">
@@ -2088,14 +2096,43 @@ if (window.api) {
             }
         }
     });
+    let currentBatchState = { active: false, total: 0, completed: 0 };
+    let pipelineTimeout1, pipelineTimeout2, pipelineTimeout3;
+
+    if (window.api.onBatchProgress) {
+        window.api.onBatchProgress((data) => {
+            currentBatchState = data;
+            const meta = document.getElementById('pipeline-progress-meta');
+            const countLabel = document.getElementById('pipeline-batch-count');
+            const pctLabel = document.getElementById('pipeline-overall-percent');
+            if (meta && countLabel && pctLabel) {
+                if (data.active) {
+                    meta.style.opacity = '1';
+                    const pct = Math.round((data.completed / data.total) * 100);
+                    countLabel.innerText = currentLang === 'ar' ? `جاري معالجة ${data.completed} من ${data.total}` : `Processing ${data.completed} of ${data.total}`;
+                    pctLabel.innerText = `${pct}%`;
+                } else {
+                    // Update to 100% just in case
+                    const pct = Math.round((data.completed / data.total) * 100) || 100;
+                    countLabel.innerText = currentLang === 'ar' ? `اكتملت معالجة ${data.total} ملفات` : `Completed ${data.total} files`;
+                    pctLabel.innerText = `${pct}%`;
+                }
+            }
+        });
+    }
+
     window.api.onStatusUpdate((status) => {
         if (!status) return;
         const msgKey = typeof status === 'string' ? status : status.msg;
         const pipeline = document.getElementById('pipeline-visualizer');
         if (!pipeline) return;
 
-        // Show pipeline if hidden
-        if (!pipeline.classList.contains('active') && msgKey !== 'status_idle') {
+        // Show pipeline if hidden or if it was showing success for a previous file
+        if ((!pipeline.classList.contains('active') && msgKey !== 'status_idle') || 
+            (pipeline.classList.contains('active') && msgKey !== 'status_idle' && pipeline.classList.contains('success'))) {
+            clearTimeout(pipelineTimeout1);
+            clearTimeout(pipelineTimeout2);
+            clearTimeout(pipelineTimeout3);
             resetPipeline();
             updatePipelineUI(); // Ensure icons and labels are correct
             pipeline.classList.remove('pipeline-exit', 'success');
@@ -2156,7 +2193,16 @@ if (window.api) {
         setStepActive('step-ready');
         pipeline.classList.add('success');
         
-        setTimeout(() => {
+        if (currentBatchState.active) {
+            // Keep it visible for the next file
+            return;
+        }
+
+        clearTimeout(pipelineTimeout1);
+        clearTimeout(pipelineTimeout2);
+        clearTimeout(pipelineTimeout3);
+
+        pipelineTimeout1 = setTimeout(() => {
             const readyStep = document.getElementById('step-ready');
             if (readyStep) {
                 readyStep.classList.remove('active');
@@ -2164,9 +2210,12 @@ if (window.api) {
             }
             
             // Exit animation
-            setTimeout(() => {
+            pipelineTimeout2 = setTimeout(() => {
                 pipeline.classList.add('pipeline-exit');
-                setTimeout(() => {
+                const meta = document.getElementById('pipeline-progress-meta');
+                if (meta) meta.style.opacity = '0';
+                
+                pipelineTimeout3 = setTimeout(() => {
                     pipeline.classList.remove('active', 'pipeline-exit', 'success');
                 }, 1000);
             }, 2000);
@@ -2175,6 +2224,23 @@ if (window.api) {
 
     // Initialize Documents
     window.api.getDocuments().then(docs => { documents = docs || []; });
+
+    if (window.api.onProjectSimilarityAsk) {
+        window.api.onProjectSimilarityAsk(async (data) => {
+            const { docData, similar, newProject } = data;
+            const msg = currentLang === 'ar' 
+                ? `تم العثور على مجلد مشابه: "${similar}". هل تود وضع الملف فيه بدلاً من إنشاء مجلد جديد باسم "${newProject}"؟`
+                : `Found similar project folder: "${similar}". Do you want to use it instead of creating "${newProject}"?`;
+                
+            const useSimilar = await confirmAction('similarity_title', '', 'ai', msg, 'use_similar_btn', 'create_new_btn');
+            
+            const finalProject = useSimilar ? similar : newProject;
+            
+            // Show status
+            showToast(currentLang === 'ar' ? 'جاري الحفظ...' : 'Saving...', {}, 2000);
+            await window.api.confirmProjectSimilarity(docData, finalProject);
+        });
+    }
 }
 
 document.getElementById('nav-add').onclick = () => switchView('add');
@@ -2467,14 +2533,12 @@ const forceStopBtn = document.getElementById('force-stop-btn');
 if (forceStopBtn) {
     forceStopBtn.onclick = async (e) => {
         e.stopPropagation();
-        const confirmed = await showConfirmModal(
-            t('stop_label'),
-            currentLang === 'ar' 
-                ? "هل أنت متأكد من إيقاف العملية الحالية؟ سيتم إنهاء تحليل الذكاء الاصطناعي فوراً."
-                : "Are you sure you want to STOP the current process? This will terminate the AI analysis immediately.",
-            'error'
-        );
-        
+        const customMsg = currentLang === 'ar'
+            ? "هل أنت متأكد من إيقاف العملية الحالية؟ سيتم إنهاء تحليل الذكاء الاصطناعي فوراً."
+            : "Are you sure you want to STOP the current process? This will terminate the AI analysis immediately.";
+
+        const confirmed = await confirmAction('stop_label', '', 'error', customMsg);
+
         if (confirmed) {
             forceStopBtn.disabled = true;
             forceStopBtn.style.opacity = '0.5';
@@ -2482,13 +2546,13 @@ if (forceStopBtn) {
             if (res.success) {
                 showToast('system_idle');
                 const pipeline = document.getElementById('pipeline-visualizer');
-                if (pipeline) pipeline.classList.remove('active');
-                // Force a small delay then reload to clean up all UI states
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                forceStopBtn.disabled = false;
-                forceStopBtn.style.opacity = '1';
+                if (pipeline) {
+                    pipeline.classList.remove('active', 'pipeline-exit', 'success');
+                    resetPipeline();
+                }
             }
+            forceStopBtn.disabled = false;
+            forceStopBtn.style.opacity = '1';
         }
     };
 }

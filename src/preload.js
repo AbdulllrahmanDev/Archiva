@@ -44,7 +44,18 @@ contextBridge.exposeInMainWorld('api', {
     // Smart Project Matching
     getSmartProjectStatus: () => ipcRenderer.invoke('get-smart-project-status'),
     toggleSmartProject: (enabled) => ipcRenderer.invoke('toggle-smart-project', enabled),
+    onProjectSimilarityAsk: (callback) => {
+        ipcRenderer.removeAllListeners('ask-project-similarity');
+        ipcRenderer.on('ask-project-similarity', (event, data) => callback(data));
+    },
+    confirmProjectSimilarity: (docData, finalProject) => ipcRenderer.invoke('confirm-project-similarity', docData, finalProject),
+    
     
     // Force Stop
-    stopBackend: () => ipcRenderer.invoke('stop-backend')
+    stopBackend: () => ipcRenderer.invoke('stop-backend'),
+
+    onBatchProgress: (callback) => {
+        ipcRenderer.removeAllListeners('batch-progress');
+        ipcRenderer.on('batch-progress', (event, data) => callback(data));
+    }
 });
