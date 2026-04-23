@@ -141,6 +141,12 @@ function initStorage() {
                         }
                     });
                 });
+
+                // Cleanup stuck processes: Reset 'processing' to 'ready' on startup
+                db.run("UPDATE documents SET status = 'ready' WHERE status = 'processing'", (err) => {
+                    if (err) console.error("Startup cleanup error:", err);
+                    else console.log("Startup: Reset stuck processing documents.");
+                });
             });
         }
     });
@@ -747,17 +753,24 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                 sendUpdateToRenderer();
                 resolve({ success: true });
 
-                // 2. Immediately spawn processor.py on this file with explicit ID
+                // 2. Immediately spawn the backend on this file with explicit ID
                 const { spawn } = require('child_process');
-                let executable = 'python';
-                if (process.platform === 'win32') {
-                    const venvPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
-                    if (fs.existsSync(venvPath)) executable = venvPath;
+                let executable;
+                let args;
+
+                if (app.isPackaged) {
+                    // Use bundled watcher.exe in production
+                    executable = path.join(process.resourcesPath, 'backend', 'watcher.exe');
+                    args = ['--process-file', filePath, watchFolder, '--id', id];
+                } else {
+                    // Use venv and watcher.py in development
+                    executable = process.platform === 'win32' 
+                        ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
+                        : path.join(__dirname, 'venv', 'bin', 'python');
+                    args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', filePath, watchFolder, '--id', id];
                 }
                 
-                const scriptPath = path.join(__dirname, 'backend', 'processor.py');
-                // Pass --id to ensure consistency even if renamed
-                const pyProcess = spawn(executable, [scriptPath, filePath, watchFolder, '--id', id], {
+                const pyProcess = spawn(executable, args, {
                     env: {
                         ...process.env,
                         PYTHONIOENCODING: 'utf-8',

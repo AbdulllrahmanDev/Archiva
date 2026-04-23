@@ -150,7 +150,12 @@ def real_ai_analyze(text, filename, file_path=None):
     - قد تحتوي الصفحة على ترويسة (Header) بها شعارات وتواريخ وأرقام "ثابتة" للمنظمة.
     - ابحث عن "الموضوع" (Subject) الفعلي داخل نص الوثيقة وليس مجرد أول سطر.
     - ابحث عن "تاريخ الوثيقة" (Document Date) وهو تاريخ صدور الخطاب وليس تاريخ اليوم أو تواريخ عشوائية في الشعارات.
-    - استخرج "المشروع" (Project) الذي تتعلق به الوثيقة إذا ذكر. وإذا لم يذكر صراحة، حاول استنتاجه بذكاء من "الموضوع" أو محتوى الوثيقة. وإذا لم تتمكن من استنتاجه نهائياً اكتب 'عام'.
+    - استخرج "المشروع" (Project) الذي تتعلق به الوثيقة. 
+    - قاعدة ذهبية: إذا لم يذكر المشروع صراحة، "يجب" استنتاجه بذكاء شديد من الموضوع. 
+      مثال: إذا كان الموضوع "شبكة مياه المدينة العمالية"، فإن المشروع هو "المدينة العمالية". 
+      مثال: إذا كان الخطاب مرسل بخصوص "مبنى إدارة المرور"، فإن المشروع هو "مبنى إدارة المرور".
+    - ابحث عن أسماء (مدن، أحياء، كباري، مستشفيات، جهات، أو أي كيان مادي) واعتبره هو المشروع. 
+    - إذا فشلت تماماً في إيجاد أي إشارة لكيان أو مكان، حينها فقط اكتب 'عام'.
     - استخرج "رقم الصادر/الوارد" كـ version_no.
 
     محتوى النص المستخرج (للمساعدة):
@@ -242,15 +247,25 @@ def real_ai_analyze(text, filename, file_path=None):
                         "image_url": {"url": f"data:{mime_type};base64,{base64_data}"},
                     }
 
-                response = requests.post(
-                    url="https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    data=json.dumps(payload),
-                    timeout=45,
-                )
+        # Retry mechanism for 429 (Rate Limit)
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps(payload),
+                timeout=45,
+            )
+            if response.status_code == 429:
+                if attempt < max_retries:
+                    wait_time = (attempt + 1) * 5
+                    print(f"AI Rate Limited (429). Retrying in {wait_time}s...", flush=True)
+                    time.sleep(wait_time)
+                    continue
+            break
 
         if response.status_code == 200:
             result = response.json()
@@ -567,19 +582,13 @@ def sanitize_folder_name(name):
 
 
 def normalize_arabic_for_match(text):
-    """Normalizes Arabic text for comparison by removing stop words and normalizing characters."""
+    """Normalizes Arabic text for comparison - keeps it simple to avoid over-matching."""
     if not text:
         return ""
     # Normalize to NFC and lowercase
     text = unicodedata.normalize("NFC", str(text)).lower().strip()
     
-    # Remove common administrative prefixes/suffixes that might vary
-    stops = ["مشروع", "مصلحة", "وزارة", "قطاع", "إدارة", "شركة", "مكتب", "منطقة", "عام"]
-    # Simple regex to remove these words if they are separate words
-    for s in stops:
-        text = re.sub(rf'\b{s}\b', '', text)
-        
-    # Character normalization:
+    # Character normalization only:
     # 1. Alif (أ إ آ -> ا)
     text = re.sub("[إأآ]", "ا", text)
     # 2. Taa Marbuta vs Haa (ة -> ه)
@@ -587,67 +596,79 @@ def normalize_arabic_for_match(text):
     # 3. Yaa vs Alif Maksura (ى -> ي)
     text = re.sub("ى", "ي", text)
     
-    # Remove extra whitespace
-    text = re.sub(r"\s+", "", text)
+    # Remove ONLY extra whitespace, keep single spaces between words
+    text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
-def find_smart_project_match(new_project, year_path, threshold=0.85, use_fuzzy=True):
+def find_smart_project_match(new_project, year_path, use_fuzzy=True):
     """
-    Tries to find the best existing folder for a project name.
-    1. Check for exact normalized match (Always on).
-    2. Check for substring match (Fuzzy mode).
-    3. Fuzzy match using difflib (Fuzzy mode).
+    Finds the best existing project folder match.
+
+    use_fuzzy=True  (Smart Matching ON):
+        - Exact normalized match  → merge silently
+        - Substring / fuzzy match → merge silently (AI decides)
+
+    use_fuzzy=False (Smart Matching OFF):
+        - Exact normalized match  → merge silently (same name = same folder)
+        - ANY similarity (substring OR fuzzy ≥ 0.45) → ask user for confirmation
+        - No similarity → create new folder
     """
+    FUZZY_AUTO_THRESHOLD    = 0.82   # Smart ON:  auto-merge if score ≥ this
+    FUZZY_CONFIRM_THRESHOLD = 0.25   # Smart OFF: ask user if score ≥ this
+
     if not os.path.exists(year_path):
         return sanitize_folder_name(new_project)
-        
-    existing_dirs = [d for d in os.listdir(year_path) if os.path.isdir(os.path.join(year_path, d))]
+
+    existing_dirs = [d for d in os.listdir(year_path)
+                     if os.path.isdir(os.path.join(year_path, d))]
     if not existing_dirs:
         return sanitize_folder_name(new_project)
-        
+
     new_norm = normalize_arabic_for_match(new_project)
     if not new_norm:
         return sanitize_folder_name(new_project)
-        
+
     best_match = None
-    highest_score = 0
-    
+    highest_score = 0.0
+    substring_match = None   # first substring hit
+
     for d in existing_dirs:
         d_norm = normalize_arabic_for_match(d)
         if not d_norm:
             continue
-            
-        # 1. Exact match after normalization (Always active - handles Taa Marbuta etc.)
-        if new_norm == d_norm:
-            print(f"Smart Match: Exact normalized match found for '{new_project}' -> '{d}'", flush=True)
-            return d
-            
-        # If fuzzy matching is disabled, skip deeper checks
-        if not use_fuzzy:
-            continue
 
-        # 2. Core Substring match: If one is a significant part of the other
-        if len(new_norm) > 3 and len(d_norm) > 3:
-            if new_norm in d_norm or d_norm in new_norm:
-                print(f"Smart Match: Substring match found for '{new_project}' -> '{d}'", flush=True)
-                return d
-        
-        # 3. Fuzzy Score
+        # ── 1. Exact normalized match (always silent) ──────────────────────
+        if new_norm == d_norm:
+            print(f"Smart Match: Exact match '{new_project}' -> '{d}'", flush=True)
+            return d
+
+        # ── 2. Fuzzy score check ──────────────────────────────────────────
         score = difflib.SequenceMatcher(None, new_norm, d_norm).ratio()
         if score > highest_score:
             highest_score = score
             best_match = d
-            
-    # If a very high fuzzy score is found, use it
-    if highest_score >= threshold:
-        if use_fuzzy:
-            print(f"Smart Match: Fuzzy match found for '{new_project}' -> '{best_match}' (score: {highest_score:.2f})", flush=True)
+
+    # ── Decision ────────────────────────────────────────────────────────────
+    if use_fuzzy:
+        # Smart Matching ON: merge automatically ONLY when VERY confident
+        # Increased threshold to 0.90 to prevent project nesting/mixing
+        if highest_score >= 0.90:
+            print(f"Smart Match (auto): fuzzy {highest_score:.2f} '{new_project}' -> '{best_match}'", flush=True)
             return best_match
-        else:
-            return {"needs_confirmation": True, "similar": best_match, "new": sanitize_folder_name(new_project)}
         
-    return sanitize_folder_name(new_project)
+        # If not highly confident, just create a new folder
+        return sanitize_folder_name(new_project)
+    else:
+        # Smart Matching OFF: ask user if there's any notable similarity
+        if highest_score >= FUZZY_CONFIRM_THRESHOLD:
+            print(f"Smart Match (confirm needed): '{new_project}' similar to '{best_match}' (score: {highest_score:.2f})", flush=True)
+            return {"needs_confirmation": True, "similar": best_match, "new": sanitize_folder_name(new_project)}
+        return sanitize_folder_name(new_project)
+        if candidate:
+            print(f"Smart Match (confirm needed): '{new_project}' similar to '{candidate}' (score: {highest_score:.2f})", flush=True)
+            return {"needs_confirmation": True, "similar": candidate, "new": sanitize_folder_name(new_project)}
+        return sanitize_folder_name(new_project)
 
 
 def organize_file_copy(doc_data, base_archive_path, smart_match=True):
@@ -669,12 +690,19 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
         # ── 2. تحديد اسم المشروع مع Fallback واضح ─────────────────────────
         project_raw = (doc_data.get("project") or "").strip()
 
-        # القيم التي تعني "بلا مشروع محدد"
-        UNKNOWN_PROJECT_VALUES = {"", "عام", "غير محدد", "غير_محدد", "n/a", "unknown"}
-        if project_raw.lower() in UNKNOWN_PROJECT_VALUES:
-            # لا يوجد مشروع محدد → نضع الملف في مجلد 'غير_محدد'
+        # "عام"       = AI صنّف الوثيقة صراحةً كـ عامة → مجلد "عام" (سلوك مقصود)
+        # ""/"غير محدد" = فشل التحليل أو لا مشروع → مجلد "غير_محدد"
+        TRULY_UNKNOWN_VALUES = {"", "غير محدد", "غير_محدد", "n/a", "unknown"}
+        GENERAL_VALUES       = {"عام"}
+
+        if project_raw.lower() in TRULY_UNKNOWN_VALUES:
+            # فشل التحليل → مجلد "غير_محدد"
             project = "غير_محدد"
             print(f"Organize: No project detected, placing in 'غير_محدد'", flush=True)
+        elif project_raw.lower() in GENERAL_VALUES:
+            # وثيقة عامة مقصودة → مجلد "عام"
+            project = "عام"
+            print(f"Organize: General document, placing in 'عام'", flush=True)
         else:
             # ── 3. بناء مسار السنة للبحث عن مجلد مطابق ─────────────────────
             year_dir = os.path.join(base_archive_path, year)
@@ -710,6 +738,21 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
 
         # ── 8. معالجة تعارض الأسماء ────────────────────────────────────────
         if os.path.exists(target_file_path):
+            # تحقق أولاً: هل الملف الموجود هو نفس الملف المصدر بالمحتوى؟
+            source_path_check = doc_data.get("file_path")
+            if source_path_check and os.path.exists(source_path_check):
+                try:
+                    existing_hash = get_file_hash(target_file_path)
+                    source_hash   = get_file_hash(source_path_check)
+                    if existing_hash == source_hash:
+                        # نفس المحتوى → احذف المصدر المكرر واستخدم الموجود
+                        if os.path.abspath(source_path_check) != os.path.abspath(target_file_path):
+                            os.remove(source_path_check)
+                            print(f"Deduplicated: Removed duplicate source, using existing: {target_file_path}", flush=True)
+                        return target_file_path
+                except Exception:
+                    pass
+            # مختلف المحتوى → أضف suffix
             unique_suffix = int(time.time()) % 10000
             new_filename = f"{clean_subject}_{unique_suffix}{ext}"
             target_file_path = os.path.join(target_dir, new_filename)
@@ -790,11 +833,23 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
 
     if not force_reprocess and existing_doc:
-        print(f"Smart Skip: Document already archived with hash {file_hash[:8]}", flush=True)
-        # Still need to signal completion for UI counters
-        print(json.dumps({"type": "sync_complete", "doc_id": file_id}, ensure_ascii=False), flush=True)
-        report_status("status_idle", 100, doc_id=file_id)
-        return None
+        # لا نتخطى الملف إذا كان موجوداً في مجلد "غير_محدد" بسبب فشل سابق في التحليل
+        # نعيد معالجته لكي يُصنَّف في المكان الصحيح
+        existing_path = existing_doc.get("file_path", "")
+        in_fallback_folder = (
+            os.sep + "غير_محدد" + os.sep in existing_path or
+            existing_path.endswith(os.sep + "غير_محدد") or
+            os.sep + "غير محدد" + os.sep in existing_path
+        )
+        if in_fallback_folder:
+            print(f"Re-processing: Document was in fallback folder, attempting proper classification: {file_hash[:8]}", flush=True)
+            # Allow processing to continue (don't return None)
+        else:
+            print(f"Smart Skip: Document already archived with hash {file_hash[:8]}", flush=True)
+            # Still need to signal completion for UI counters
+            print(json.dumps({"type": "sync_complete", "doc_id": file_id}, ensure_ascii=False), flush=True)
+            report_status("status_idle", 100, doc_id=file_id)
+            return None
 
     # 3. PDF Splitting Logic
     if ext == ".pdf" and split_pdf and not skip_ai:
@@ -942,6 +997,39 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         # Add to DB
         report_status("status_saving", 95, doc_id=file_id)
         add_document(doc_data)
+
+        # ── تنظيف: إذا كان الملف موجوداً سابقاً في مجلد "غير_محدد" أو "عام"
+        # بسبب فشل التحليل، نحذف تلك النسخة القديمة الآن بعد نجاح التصنيف ──────
+        stale_dirs_to_check = []
+        for year_dir in os.listdir(output_folder):
+            year_path = os.path.join(output_folder, year_dir)
+            if not os.path.isdir(year_path) or year_dir.startswith('.'):
+                continue
+            for fallback_name in ("غير_محدد", "غير محدد"):
+                stale_dir = os.path.join(year_path, fallback_name)
+                if os.path.isdir(stale_dir):
+                    stale_dirs_to_check.append(stale_dir)
+
+        for stale_dir in stale_dirs_to_check:
+            for stale_file in os.listdir(stale_dir):
+                if not stale_file.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.webp')):
+                    continue
+                stale_file_path = os.path.join(stale_dir, stale_file)
+                # Skip the file we just organized (it may have moved here legitimately)
+                if os.path.abspath(stale_file_path) == os.path.abspath(organized_path):
+                    continue
+                # Check SHA256 match
+                try:
+                    stale_hash = get_file_hash(stale_file_path)
+                    if stale_hash == file_hash:
+                        stale_json = os.path.splitext(stale_file_path)[0] + ".json"
+                        os.remove(stale_file_path)
+                        print(f"Cleanup: Removed stale fallback file: {stale_file_path}", flush=True)
+                        if os.path.exists(stale_json):
+                            os.remove(stale_json)
+                            print(f"Cleanup: Removed stale fallback sidecar: {stale_json}", flush=True)
+                except Exception as cleanup_err:
+                    print(f"Cleanup warning: {cleanup_err}", flush=True)
 
         print(f"Archived successfully: {file_name}", flush=True)
 

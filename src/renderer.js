@@ -1706,11 +1706,9 @@ function renderPendingList() {
         return `
             <div class="px-8 py-4 flex items-center justify-between group">
                 <div class="flex items-center gap-4">
-                    <button class="w-12 h-12 flex items-center justify-center rounded-xl bg-surface-container-highest/50 text-primary hover:bg-primary/10 hover:text-primary transition-all cursor-pointer border border-outline-variant/10 shadow-sm" 
-                            onclick="window.api.openPath(\`${file.path.replace(/\\/g, '\\\\')}\`)" 
-                            title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
+                    <div class="text-primary opacity-40">
                         ${getIcon(icon)}
-                    </button>
+                    </div>
                     <div>
                         <p class="text-sm font-semibold text-on-surface truncate max-w-md">${file.name}</p>
                         <p class="text-[10px] text-on-surface-variant font-bold uppercase tracking-tight">
@@ -2226,19 +2224,34 @@ if (window.api) {
     window.api.getDocuments().then(docs => { documents = docs || []; });
 
     if (window.api.onProjectSimilarityAsk) {
-        window.api.onProjectSimilarityAsk(async (data) => {
-            const { docData, similar, newProject } = data;
-            const msg = currentLang === 'ar' 
-                ? `تم العثور على مجلد مشابه: "${similar}". هل تود وضع الملف فيه بدلاً من إنشاء مجلد جديد باسم "${newProject}"؟`
-                : `Found similar project folder: "${similar}". Do you want to use it instead of creating "${newProject}"?`;
-                
+        // Queue to handle multiple files needing confirmation — one dialog at a time
+        let _similarityQueue = [];
+        let _similarityBusy = false;
+
+        async function _processSimilarityQueue() {
+            if (_similarityBusy || _similarityQueue.length === 0) return;
+            _similarityBusy = true;
+
+            const { docData, similar, newProject } = _similarityQueue.shift();
+
+            const fileName = docData.file || docData.title || '';
+            const msg = currentLang === 'ar'
+                ? `الملف: "${fileName}"\n\nتم العثور على مجلد مشابه: "${similar}"\nهل تود وضع الملف فيه بدلاً من إنشاء مجلد جديد باسم "${newProject}"؟`
+                : `File: "${fileName}"\n\nFound similar project folder: "${similar}".\nUse it instead of creating "${newProject}"?`;
+
             const useSimilar = await confirmAction('similarity_title', '', 'ai', msg, 'use_similar_btn', 'create_new_btn');
-            
             const finalProject = useSimilar ? similar : newProject;
-            
-            // Show status
+
             showToast(currentLang === 'ar' ? 'جاري الحفظ...' : 'Saving...', {}, 2000);
             await window.api.confirmProjectSimilarity(docData, finalProject);
+
+            _similarityBusy = false;
+            _processSimilarityQueue(); // Process next in queue
+        }
+
+        window.api.onProjectSimilarityAsk(async (data) => {
+            _similarityQueue.push(data);
+            _processSimilarityQueue();
         });
     }
 }

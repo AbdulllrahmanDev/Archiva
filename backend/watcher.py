@@ -379,6 +379,30 @@ if __name__ == '__main__':
                 import_external_folder(external_folder, main_folder)
             else:
                 print("Error: --import requires a folder path", flush=True)
+        elif sys.argv[1] == '--process-file':
+            # Mode: process a single file (used for manual reprocessing)
+            if len(sys.argv) > 3:
+                file_to_process = os.path.abspath(sys.argv[2])
+                watch_folder = os.path.abspath(sys.argv[3])
+                
+                # Optional --id
+                passed_id = None
+                if "--id" in sys.argv:
+                    try:
+                        id_idx = sys.argv.index("--id")
+                        if len(sys.argv) > id_idx + 1:
+                            passed_id = sys.argv[id_idx + 1]
+                    except: pass
+                
+                # Setup DB and process
+                set_db_path(watch_folder)
+                try:
+                    # Force AI explicitly since this is a manual manual invocation
+                    process_file(file_to_process, watch_folder, skip_ai=False, force_reprocess=True, doc_id=passed_id)
+                except Exception as e:
+                    print(f"Manual Processing error: {e}", flush=True)
+            else:
+                print("Error: --process-file requires <file_path> <watch_folder>", flush=True)
         else:
             watch_folder = os.path.abspath(sys.argv[1])
             if not os.path.exists(watch_folder):
