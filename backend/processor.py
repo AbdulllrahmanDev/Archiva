@@ -665,10 +665,6 @@ def find_smart_project_match(new_project, year_path, use_fuzzy=True):
             print(f"Smart Match (confirm needed): '{new_project}' similar to '{best_match}' (score: {highest_score:.2f})", flush=True)
             return {"needs_confirmation": True, "similar": best_match, "new": sanitize_folder_name(new_project)}
         return sanitize_folder_name(new_project)
-        if candidate:
-            print(f"Smart Match (confirm needed): '{new_project}' similar to '{candidate}' (score: {highest_score:.2f})", flush=True)
-            return {"needs_confirmation": True, "similar": candidate, "new": sanitize_folder_name(new_project)}
-        return sanitize_folder_name(new_project)
 
 
 def organize_file_copy(doc_data, base_archive_path, smart_match=True):
