@@ -130,7 +130,7 @@ def get_file_base64(file_path):
 def real_ai_analyze(text, filename, file_path=None):
     """Call OpenRouter API to analyze the document content using Multimodal Vision."""
     api_key_raw = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-exp:free")
+    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-preview:free")
 
     if not api_key_raw:
         print("Error: OPENROUTER_API_KEY is missing in background process.", flush=True)
@@ -189,75 +189,53 @@ def real_ai_analyze(text, filename, file_path=None):
     """
 
     try:
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(
-                {
-                    "model": ai_model,
-                    "messages": [
-                        {"role": "user", "content": [{"type": "text", "text": prompt}]}
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "max_tokens": 1000,
-                }
-            ),
-            timeout=45,  # Increased timeout for larger image/pdf payloads
-        )
+        # -------------------------------------------------------
+        # بناء الـ payload الصحيح مرة واحدة فقط (FIX: كان يرسل طلبين)
+        # -------------------------------------------------------
 
-        # Add visual context if file_path is provided (Multimodal upgrade)
+        # الـ content الافتراضي: نص فقط
+        content_parts = [{"type": "text", "text": prompt}]
+
+        # إضافة الملف (Multimodal) إذا كان متاحاً
         if file_path and os.path.exists(file_path):
             base64_data = get_file_base64(file_path)
             if base64_data:
                 ext = os.path.splitext(file_path)[1].lower()
-                mime_type = "application/pdf" if ext == ".pdf" else "image/jpeg"
                 if ext == ".png":
                     mime_type = "image/png"
                 elif ext == ".webp":
                     mime_type = "image/webp"
+                elif ext == ".pdf":
+                    mime_type = "application/pdf"
+                else:
+                    mime_type = "image/jpeg"
 
-                # Update payload with the actual file content (Vision/PDF ingestion)
-                # Note: We rebuild the payload here to include the file
-                payload = {
-                    "model": ai_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url" if ext != ".pdf" else "file",
-                                    "image_url": {
-                                        "url": f"data:{mime_type};base64,{base64_data}"
-                                    }
-                                    if ext != ".pdf"
-                                    else None,
-                                },
-                            ],
-                        }
-                    ],
-                    "response_format": {"type": "json_object"},
-                    "max_tokens": 1000,
+                # OpenRouter / Gemini يقبل PDF وصور عبر image_url بنفس الأسلوب
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{base64_data}"},
+                })
+                print(f"AI: Sending file as multimodal ({mime_type})", flush=True)
+            else:
+                print("AI: Could not encode file to base64, sending text only.", flush=True)
+        else:
+            print("AI: No file path provided, sending text only.", flush=True)
+
+        payload = {
+            "model": ai_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": content_parts,
                 }
-
-                # Special handling for PDF/File types in OpenRouter if needed
-                if ext == ".pdf":
-                    # OpenRouter usually takes PDFs in a similar way or as a specific 'file' type depending on provider
-                    # But for Gemini, image_url works for images, and some providers support application/pdf in image_url or a 'document' type
-                    # Let's match the working Chat logic in main.js precisely:
-                    # contentArray.push({ type: 'image_url', image_url: { url: dataUrl } }); (even for PDF in main.js?)
-                    # Wait, looking at main.js line 443: contentArray.push({ type: 'image_url', image_url: { url: dataUrl } });
-                    # Yes, main.js uses 'image_url' even for PDF data URLs when sending to OpenRouter.
-                    payload["messages"][0]["content"][1] = {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime_type};base64,{base64_data}"},
-                    }
+            ],
+            "response_format": {"type": "json_object"},
+            "max_tokens": 1000,
+        }
 
         # Retry mechanism for 429 (Rate Limit)
         max_retries = 2
+        response = None
         for attempt in range(max_retries + 1):
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
@@ -275,6 +253,10 @@ def real_ai_analyze(text, filename, file_path=None):
                     time.sleep(wait_time)
                     continue
             break
+
+        if response is None:
+            print("AI: No response received after retries.", flush=True)
+            return None
 
         if response.status_code == 200:
             result = response.json()
@@ -400,7 +382,7 @@ def real_ai_analyze(text, filename, file_path=None):
 def ai_detect_pdf_splits(file_path, filename):
     """Calls AI to detect if a PDF contains multiple documents and identify page ranges."""
     api_key_raw = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-exp:free")
+    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-preview:free")
 
     if not api_key_raw:
         return None

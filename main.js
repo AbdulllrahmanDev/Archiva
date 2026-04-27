@@ -217,7 +217,7 @@ function startBackend() {
             PYTHONIOENCODING: 'utf-8',
             PYTHONUTF8: '1',
             OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free',
+            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free',
             AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
             AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
             PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0',
@@ -443,7 +443,7 @@ ipcMain.handle('process-uploads', async (event, files, forceAi) => {
                         PYTHONIOENCODING: 'utf-8',
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free',
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free',
                         SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
                         PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0'
                     }
@@ -833,7 +833,7 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         PYTHONIOENCODING: 'utf-8',
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free'
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free'
                     }
                 });
                 
@@ -950,7 +950,7 @@ const pdfParse = require('pdf-parse');
 
 ipcMain.handle('ai-chat', async (event, messages) => {
     const rawApiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free';
+    const model = process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free';
 
     if (!rawApiKey) {
         return { error: 'API Key is missing. Please set OPENROUTER_API_KEY in the .env file.' };
@@ -1103,7 +1103,7 @@ ipcMain.handle('import-folder', async (event, folderPath) => {
                 PYTHONIOENCODING: 'utf-8',
                 PYTHONUTF8: '1',
                 OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free'
+                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free'
             }
         });
 
