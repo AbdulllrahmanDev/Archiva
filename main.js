@@ -152,6 +152,34 @@ function initStorage() {
     });
 }
 
+function cleanupEmptyDirsSync(startDir, stopDir) {
+    try {
+        if (!startDir || !stopDir) return;
+        let currDir = path.resolve(startDir);
+        const baseDir = path.resolve(stopDir);
+        
+        while (currDir && currDir.length > 3) {
+            if (currDir === baseDir) break;
+            
+            if (fs.existsSync(currDir) && fs.statSync(currDir).isDirectory()) {
+                const files = fs.readdirSync(currDir);
+                // Filter out hidden files like .DS_Store or empty strings if any
+                if (files.length === 0) {
+                    fs.rmdirSync(currDir);
+                    console.log(`Deleted empty directory: ${currDir}`);
+                    currDir = path.dirname(currDir);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    } catch (e) {
+        console.error('Error cleaning up empty directory:', e);
+    }
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
@@ -660,6 +688,7 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     
     if (targetPath !== docData.file_path && fs.existsSync(docData.file_path)) {
         try {
+            const oldDir = path.dirname(docData.file_path);
             fs.renameSync(docData.file_path, targetPath);
             // Move sidecar if exists
             const oldSidecar = docData.file_path.replace(new RegExp(`${ext}$`), '.json');
@@ -669,6 +698,9 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
             }
             docData.file_path = targetPath;
             docData.file = newFilename;
+            
+            // Clean up old directory if empty
+            cleanupEmptyDirsSync(oldDir, watchFolder);
         } catch(e) {
             console.error("Error moving file:", e);
         }
@@ -874,7 +906,14 @@ ipcMain.handle('delete-document', async (event, id, filePath) => {
         // 1. Delete file from disk if it exists
         if (filePath && fs.existsSync(filePath)) {
             try {
+                const dirPath = path.dirname(filePath);
+                // Also delete sidecar if exists
+                const ext = path.extname(filePath);
+                const sidecarPath = filePath.replace(new RegExp(`${ext}$`), '.json');
+                if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+                
                 fs.unlinkSync(filePath);
+                cleanupEmptyDirsSync(dirPath, watchFolder);
             } catch (err) {
                 console.error(`Error deleting file: ${err}`);
             }
@@ -924,7 +963,15 @@ ipcMain.handle('delete-multiple-documents', async (event, docs) => {
         let errors = [];
         docs.forEach(doc => {
             if (doc.file_path && fs.existsSync(doc.file_path)) {
-                try { fs.unlinkSync(doc.file_path); }
+                try { 
+                    const dirPath = path.dirname(doc.file_path);
+                    const ext = path.extname(doc.file_path);
+                    const sidecarPath = doc.file_path.replace(new RegExp(`${ext}$`), '.json');
+                    if (fs.existsSync(sidecarPath)) fs.unlinkSync(sidecarPath);
+                    
+                    fs.unlinkSync(doc.file_path);
+                    cleanupEmptyDirsSync(dirPath, watchFolder);
+                }
                 catch (err) { errors.push(err.message); }
             }
         });

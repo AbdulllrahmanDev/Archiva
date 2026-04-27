@@ -70,6 +70,26 @@ def hide_file(path):
             print(f"Error hiding file {path}: {e}", flush=True)
 
 
+def cleanup_empty_dirs(start_dir, stop_dir):
+    """Recursively deletes empty directories from start_dir up to (but not including) stop_dir."""
+    try:
+        curr_dir = os.path.abspath(start_dir)
+        base_dir = os.path.abspath(stop_dir)
+        
+        while curr_dir and len(curr_dir) > 3:
+            if curr_dir == base_dir:
+                break
+                
+            if os.path.exists(curr_dir) and os.path.isdir(curr_dir) and not os.listdir(curr_dir):
+                os.rmdir(curr_dir)
+                print(f"Deleted empty directory: {curr_dir}", flush=True)
+                curr_dir = os.path.dirname(curr_dir)
+            else:
+                break
+    except Exception as e:
+        print(f"Error cleaning up empty directory: {e}", flush=True)
+
+
 def get_file_hash(file_path):
     hash_sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
@@ -757,6 +777,10 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
             if source_path != target_file_path:
                 shutil.move(source_path, target_file_path)
                 print(f"File moved to: {target_file_path}", flush=True)
+                
+                # تنظيف المجلدات الفارغة بعد النقل
+                source_dir = os.path.dirname(source_path)
+                cleanup_empty_dirs(source_dir, base_archive_path)
             else:
                 print(f"File already at target: {target_file_path}", flush=True)
         else:
@@ -1022,6 +1046,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
                         if os.path.exists(stale_json):
                             os.remove(stale_json)
                             print(f"Cleanup: Removed stale fallback sidecar: {stale_json}", flush=True)
+                        cleanup_empty_dirs(stale_dir, output_folder)
                 except Exception as cleanup_err:
                     print(f"Cleanup warning: {cleanup_err}", flush=True)
 
