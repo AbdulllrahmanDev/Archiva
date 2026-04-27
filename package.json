@@ -1,6 +1,6 @@
 {
   "name": "archiva",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "description": "",
   "main": "main.js",
   "scripts": {
@@ -65,6 +65,7 @@
     "@openrouter/sdk": "^0.12.19",
     "dotenv": "^17.4.2",
     "electron-reload": "^2.0.0-alpha.1",
+    "electron-updater": "^6.8.3",
     "marked": "^18.0.0",
     "pdf-parse": "^2.4.5",
     "sqlite3": "^6.0.1"
