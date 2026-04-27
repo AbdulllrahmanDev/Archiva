@@ -1245,7 +1245,6 @@ function buildDynamicFilterMenu() {
             makeSection(currentLang === 'ar' ? 'تصنيف الوثيقة' : 'Class', 'class', [...classes]),
             makeSection(currentLang === 'ar' ? 'السنة' : 'Year', 'year', [...years].sort().reverse()),
             makeSection(currentLang === 'ar' ? 'المشروع' : 'Project', 'project', [...projects]),
-            makeSection(currentLang === 'ar' ? 'الصيغة' : 'Format', 'type', [...types], v => v),
         ].join('')}
     `;
 
@@ -1429,7 +1428,7 @@ function renderGridCard(doc) {
             <div class="card-preview">
                 <div class="card-preview-gradient"></div>
 
-                <div class="text-[1.75rem] font-black text-on-surface-variant/10 tracking-tighter uppercase select-none">${doc.type}</div>
+                <div class="text-[1.75rem] font-black text-on-surface-variant/10 tracking-tighter uppercase select-none"></div>
                     <!-- Format tag hidden as the central text now represents it -->
                 ${!isSelectionMode ? `
                     <div class="absolute top-4 right-4 z-20">
@@ -1742,9 +1741,13 @@ function selectDocument(id, isSoftUpdate = false) {
             <!-- Premium Metadata Header -->
             <div class="space-y-4">
                 <div class="flex items-center gap-3">
+                    ${(doc.governorate && doc.governorate !== 'غير_محددة') ? `
                     <span class="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-widest border border-primary/20">
-                        ${isProcessing ? 'SCANNING...' : doc.type}
-                    </span>
+                        ${doc.governorate}
+                    </span>` : (isProcessing ? `
+                    <span class="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-widest border border-primary/20">
+                        SCANNING...
+                    </span>` : '')}
                     ${!isProcessing && doc.class ? `
                     <span class="px-2.5 py-1 bg-surface-container-highest text-on-surface-variant text-[10px] font-black rounded-full tracking-widest border border-outline-variant/10">
                         ${doc.class}
@@ -1976,44 +1979,110 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
     const isGovernorate = fieldKey === 'governorate';
     
     let inputEl;
+    let customDropdown;
+
     if (isGovernorate) {
-        inputEl = document.createElement('select');
-        egyptGovernorates.forEach(gov => {
-            const opt = document.createElement('option');
-            opt.value = gov;
-            opt.textContent = gov;
-            if (gov === currentValue) opt.selected = true;
-            inputEl.appendChild(opt);
-        });
+        const container = document.createElement('div');
+        container.className = 'relative w-full mt-2';
+        
+        inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.placeholder = currentLang === 'ar' ? 'ابحث عن محافظة...' : 'Search governorate...';
+        inputEl.className = 'w-full bg-surface-container-highest text-sm font-bold text-on-surface outline-none border border-primary/20 rounded-xl px-3 py-2.5 transition-all focus:border-primary/60';
+        inputEl.value = currentValue || '';
+
+        customDropdown = document.createElement('div');
+        customDropdown.className = 'absolute z-[100] left-0 right-0 mt-2 max-h-60 overflow-y-auto bg-surface-container-highest border border-primary/20 rounded-2xl shadow-2xl shadow-black/40 custom-scrollbar';
+        customDropdown.style.direction = 'ltr'; // Moves scrollbar to the right
+        
+        const renderGovList = (filter = '') => {
+            customDropdown.innerHTML = '';
+            const filtered = egyptGovernorates.filter(g => g.toLowerCase().includes(filter.toLowerCase()));
+            filtered.forEach(gov => {
+                const item = document.createElement('div');
+                item.className = `p-3 text-sm font-bold cursor-pointer transition-all hover:bg-primary hover:text-white flex items-center justify-between group ${gov === currentValue ? 'bg-primary/10 text-primary' : 'text-on-surface'}`;
+                item.style.direction = 'rtl'; // Keep text Arabic direction
+                item.style.textAlign = 'right';
+                item.innerHTML = `<span>${gov}</span> ${gov === currentValue ? `<span class="text-primary group-hover:text-white">${getIcon('check', 'xs')}</span>` : ''}`;
+                item.onclick = () => {
+                    inputEl.value = gov;
+                    customDropdown.classList.add('hidden');
+                    document.getElementById(`save-edit-${fieldKey}`)?.click();
+                };
+                customDropdown.appendChild(item);
+            });
+        };
+
+        inputEl.onfocus = () => {
+            customDropdown.classList.remove('hidden');
+            renderGovList(inputEl.value);
+        };
+        inputEl.oninput = (e) => renderGovList(e.target.value);
+        
+        container.appendChild(inputEl);
+        container.appendChild(customDropdown);
+        inputEl.dropdownContainer = container;
+
+        // Close on click outside
+        setTimeout(() => {
+            const handleGlobalClick = (e) => {
+                // If clicked outside the entire card, cancel edit
+                if (!cardEl.contains(e.target)) {
+                    document.getElementById(`cancel-edit-${fieldKey}`)?.click();
+                    return;
+                }
+                // If clicked outside the dropdown but inside the card, just hide dropdown
+                if (!container.contains(e.target)) {
+                    customDropdown.classList.add('hidden');
+                }
+            };
+            inputEl._globalClickHandler = handleGlobalClick;
+            document.addEventListener('click', handleGlobalClick);
+        }, 10);
     } else {
         inputEl = document.createElement(isMultiline ? 'textarea' : 'input');
         inputEl.value = (currentValue === '—' || !currentValue) ? '' : currentValue;
         inputEl.placeholder = `${currentLang === 'ar' ? 'أدخل' : 'Enter'} ${fieldLabel}...`;
-        if (isMultiline) inputEl.rows = 2;
+        if (isMultiline) inputEl.rows = 3;
+        inputEl.className = `w-full bg-surface-container-highest text-sm font-bold text-on-surface outline-none border border-primary/20 rounded-xl px-3 py-2.5 resize-none mt-2 placeholder:text-on-surface-variant/30 transition-all focus:border-primary/60 ${isMultiline ? 'min-h-[5rem]' : ''}`;
     }
 
-    // Style to match the card
-    inputEl.className = `w-full bg-surface-container-high text-sm font-bold text-on-surface outline-none border-b-2 border-primary resize-none mt-1 placeholder:text-on-surface-variant/30 ${isMultiline ? 'min-h-[3rem]' : ''}`;
-    if (isGovernorate) inputEl.classList.add('py-1', 'px-2', 'rounded-lg');
-
     // Replace value text with input
-    valueEl.replaceWith(inputEl);
+    if (isGovernorate) {
+        valueEl.replaceWith(inputEl.dropdownContainer);
+    } else {
+        valueEl.replaceWith(inputEl);
+    }
     inputEl.focus();
-    if (!isGovernorate) inputEl.select();
+    if (!isGovernorate) {
+        inputEl.select();
+        // Add click-outside listener for regular fields
+        setTimeout(() => {
+            const handleGlobalClickRegular = (e) => {
+                if (!cardEl.contains(e.target)) {
+                    document.getElementById(`cancel-edit-${fieldKey}`)?.click();
+                }
+            };
+            inputEl._globalClickHandler = handleGlobalClickRegular;
+            document.addEventListener('click', handleGlobalClickRegular);
+        }, 10);
+    }
 
-    // Highlight the card
-    cardEl.classList.add('border-primary/40', 'bg-primary/5');
-    cardEl.classList.remove('hover:border-primary/20');
+    // Highlight the card subtly (only if it's a standard field card, not the main title)
+    if (fieldKey !== 'title') {
+        cardEl.classList.add('bg-surface-container-highest/30', 'transition-all');
+        cardEl.classList.remove('hover:border-primary/20');
+    }
 
-    // Create action buttons
+    // Create action buttons (Modern design)
     const actions = document.createElement('div');
-    actions.className = 'flex gap-2 mt-3 justify-end';
+    actions.className = 'flex gap-2 mt-4 justify-end items-center';
     actions.innerHTML = `
-        <button id="cancel-edit-${fieldKey}" class="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:text-error bg-surface-container rounded-lg transition-all">
+        <button id="cancel-edit-${fieldKey}" class="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:text-error hover:bg-error/5 rounded-xl transition-all">
             ${currentLang === 'ar' ? 'إلغاء' : 'Cancel'}
         </button>
-        <button id="save-edit-${fieldKey}" class="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-white bg-primary rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-sm shadow-primary/30">
-            ${currentLang === 'ar' ? 'حفظ' : 'Save'}
+        <button id="save-edit-${fieldKey}" class="px-5 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-primary rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md shadow-primary/20">
+            ${currentLang === 'ar' ? 'حفظ التعديل' : 'Save Changes'}
         </button>
     `;
     cardEl.appendChild(actions);
@@ -2023,11 +2092,18 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         const p = document.createElement('p');
         p.className = `field-value ${isMultiline ? 'text-sm' : 'text-xs'} font-bold text-on-surface leading-snug ${isMultiline ? 'pl-7' : 'truncate group-hover/field:whitespace-normal'}`;
         if (fieldKey === 'version_no') p.classList.add('text-primary');
+        if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
+        
         p.textContent = currentValue || '—';
-        inputEl.replaceWith(p);
+        (inputEl.dropdownContainer || inputEl).replaceWith(p);
         actions.remove();
-        cardEl.classList.remove('border-primary/40', 'bg-primary/5');
-        cardEl.classList.add('hover:border-primary/20');
+        if (fieldKey !== 'title') {
+            cardEl.classList.remove('bg-surface-container-highest/30');
+            cardEl.classList.add('hover:border-primary/20');
+        }
+        if (inputEl._globalClickHandler) {
+            document.removeEventListener('click', inputEl._globalClickHandler);
+        }
     };
 
     const saveFn = async () => {
@@ -2056,13 +2132,20 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 const p = document.createElement('p');
                 p.className = `field-value ${isMultiline ? 'text-sm' : 'text-xs'} font-bold text-on-surface leading-snug`;
                 if (fieldKey === 'version_no') p.classList.add('text-primary');
+                if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
+                
                 p.textContent = newValue || '—';
-                inputEl.replaceWith(p);
+                (inputEl.dropdownContainer || inputEl).replaceWith(p);
                 actions.remove();
-                cardEl.classList.remove('border-primary/40', 'bg-primary/5');
-                cardEl.classList.add('hover:border-primary/20');
+                if (fieldKey !== 'title') {
+                    cardEl.classList.remove('bg-surface-container-highest/30');
+                    cardEl.classList.add('hover:border-primary/20');
+                }
                 
                 showToast('storage_updated');
+                if (inputEl._globalClickHandler) {
+                    document.removeEventListener('click', inputEl._globalClickHandler);
+                }
 
                 // 3. إعادة تحديث العرض الرئيسي لضمان ترتيب البيانات أو البحث
                 renderArchiveView(document.getElementById('global-search-input')?.value || '');

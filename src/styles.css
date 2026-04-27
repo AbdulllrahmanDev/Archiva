@@ -522,6 +522,36 @@ html.dark .filter-menu-flyout {
     background-color: var(--outline-variant);
 }
 
+/* Custom Scrollbar for specific containers */
+.custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--primary) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0; /* Prevents protrusion at rounded corners */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: 10px;
+    opacity: 0.3;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-dim);
+}
+
+.custom-scrollbar::-webkit-scrollbar-button {
+    display: none;
+}
+
 /* Ensure containers that should be smart use 'auto' and stable gutter */
 .overflow-y-auto {
     overflow-y: auto;
