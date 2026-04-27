@@ -5,7 +5,6 @@ import json
 import unicodedata
 import hashlib
 
-# Force UTF-8 FIRST before any other imports that print
 if sys.platform == "win32":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
@@ -16,22 +15,16 @@ from watchdog.events import FileSystemEventHandler
 from processor import process_file
 from db_manager import initialize_db, rebuild_index, rebuild_index_recursive, set_db_path, get_db_path, get_document_status
 
-# Processing lock: prevents the same file from being processed twice concurrently
 _processing_lock = set()
-# Cooldown cache: ignores repeated watchdog events for 30 seconds after processing
-_recently_seen   = {}   # path -> timestamp
+_recently_seen   = {}   
 _COOLDOWN_SECS   = 30
 
 # ============================================================
 # AUTO-ANALYSIS CONFIGURATION  (Sentinel File System)
 # ============================================================
-# The state is controlled by sentinel files written by main.js.
-# This allows live enable/disable WITHOUT restarting the process.
-# Fallback: read ENV vars set at process spawn time.
 
 _WATCH_FOLDER = os.environ.get('ARCHIVA_WATCH_FOLDER', '')
 
-# ENV-based fallbacks (used at first startup before any sentinel is written)
 _ENV_AUTO_ENABLED = os.environ.get('AUTO_ANALYSIS_ENABLED', '1') == '1'
 _ENV_ACTIVATED_AT = os.environ.get('AUTO_ANALYSIS_ACTIVATED_AT', '')
 
@@ -47,7 +40,8 @@ def _read_sentinel_enabled():
             return open(enabled_file, 'r', encoding='utf-8').read().strip() == '1'
         except Exception:
             pass
-    return _ENV_AUTO_ENABLED  # Fallback to startup ENV
+    return _ENV_AUTO_ENABLED
+    
 def _read_sentinel_split_enabled():
     """Read live pdf splitting state from sentinel file."""
     split_file = os.path.join(_sentinel_dir(), 'pdf_split_enabled')
@@ -56,7 +50,7 @@ def _read_sentinel_split_enabled():
             return open(split_file, 'r', encoding='utf-8').read().strip() == '1'
         except Exception:
             pass
-    return os.environ.get('PDF_SPLIT_ENABLED', '0') == '1' # Fallback to startup ENV
+    return os.environ.get('PDF_SPLIT_ENABLED', '0') == '1' 
 
 def _read_sentinel_smart_match_enabled():
     """Read live smart project matching state from sentinel file."""
@@ -66,7 +60,7 @@ def _read_sentinel_smart_match_enabled():
             return open(smart_file, 'r', encoding='utf-8').read().strip() == '1'
         except Exception:
             pass
-    return os.environ.get('SMART_PROJECT_MATCHING', '1') == '1' # Default true
+    return os.environ.get('SMART_PROJECT_MATCHING', '1') == '1'
 
 def _read_sentinel_timestamp():
     """Read live activation timestamp from sentinel file. Returns Unix float or None."""
@@ -81,7 +75,6 @@ def _read_sentinel_timestamp():
         except Exception as e:
             print(f"Warning: Could not parse activation timestamp from sentinel: {e}", flush=True)
         return None
-    # Fallback to ENV-based timestamp
     if _ENV_ACTIVATED_AT:
         try:
             import datetime
@@ -98,13 +91,10 @@ class ArchiveHandler(FileSystemEventHandler):
 
     def _should_process(self, path):
         """Returns True only if the path is a media file that should be processed."""
-        # 1. Only handle known media types — ignore .json, .db, .tmp etc.
         if not path.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png', '.webp')):
             return False
-        # 2. Skip if already being processed concurrently
         if path in _processing_lock:
             return False
-        # 4. Skip if within cooldown window (Windows fires multiple events per move)
         last_seen = _recently_seen.get(path)
         if last_seen and (time.time() - last_seen) < _COOLDOWN_SECS:
             return False
@@ -113,7 +103,6 @@ class ArchiveHandler(FileSystemEventHandler):
     def _mark_seen(self, path):
         """Record that we just handled this path."""
         _recently_seen[path] = time.time()
-        # Prune old entries to keep memory clean
         now = time.time()
         expired = [p for p, t in _recently_seen.items() if now - t > _COOLDOWN_SECS * 2]
         for p in expired:
@@ -125,16 +114,23 @@ class ArchiveHandler(FileSystemEventHandler):
         src_path = unicodedata.normalize('NFC', event.src_path)
         if not self._should_process(src_path):
             return
-        self._mark_seen(src_path)  # Register immediately to block duplicate events
-        time.sleep(1)  # Brief pause to ensure file is fully written
+        self._mark_seen(src_path)  
+        time.sleep(1) 
         _processing_lock.add(src_path)
         try:
-            skip_ai = not _read_sentinel_enabled()
-            
-            # Check for force_ai override
+            # Check if this file is already being processed by a dedicated process
+            # (e.g. spawned by process-uploads in main.js). If so, skip to avoid double-processing.
             file_name = os.path.basename(src_path)
             normalized_name = unicodedata.normalize("NFC", file_name)
             file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
+            
+            if get_document_status(file_id) == 'processing':
+                print(f"Watcher: Skipping {file_name} — already being processed by dedicated process.", flush=True)
+                return
+
+            skip_ai = not _read_sentinel_enabled()
+            
+            # Check for force_ai override
             sentinel_dir = os.path.join(self.folder_path, '.archiva')
             force_ai_file = os.path.join(sentinel_dir, f'force_ai_{file_id}.tmp')
             if os.path.exists(force_ai_file):
@@ -157,24 +153,19 @@ class ArchiveHandler(FileSystemEventHandler):
         src_path  = unicodedata.normalize('NFC', event.src_path)
         dest_path = unicodedata.normalize('NFC', event.dest_path)
 
-        # KEY FIX: Ignore internal moves (organized by the processor itself).
-        # If the SOURCE was already inside our watch folder, this is just
-        # shutil.move() reorganising the file — not a new upload.
         src_abs  = os.path.abspath(src_path)
         src_base = os.path.abspath(self.folder_path)
         if src_abs.startswith(src_base + os.sep) or src_abs == src_base:
-            return  # Internal move — nothing to do
+            return  
 
-        # External file moved/renamed into the watch folder
         if not self._should_process(dest_path):
             return
-        self._mark_seen(dest_path)  # Register immediately to block duplicate events
+        self._mark_seen(dest_path)  
         time.sleep(1)
         _processing_lock.add(dest_path)
         try:
             skip_ai = not _read_sentinel_enabled()
             
-            # Check for force_ai override
             file_name = os.path.basename(dest_path)
             normalized_name = unicodedata.normalize("NFC", file_name)
             file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]

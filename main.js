@@ -217,7 +217,7 @@ function startBackend() {
             PYTHONIOENCODING: 'utf-8',
             PYTHONUTF8: '1',
             OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001',
+            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free',
             AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
             AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
             PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0',
@@ -298,7 +298,7 @@ app.whenReady().then(() => {
     loadAutoAnalysisConfig();
     initStorage();
     // Write sentinel files so the watcher starts with correct state
-    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, pdfSplitEnabled);
+    writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, pdfSplitEnabled, smartProjectMatchingEnabled);
     createWindow();
     startBackend();
 
@@ -380,7 +380,7 @@ ipcMain.handle('select-files', async () => {
 });
 
 ipcMain.handle('process-uploads', async (event, files, forceAi) => {
-    console.log(`[IPC] process-uploads: processing ${files.length} files (forceAi: ${forceAi})`);
+    console.log(`[IPC] process-uploads: processing ${files.length} files`);
     
     currentBatch.total = files.length;
     currentBatch.completedIds.clear();
@@ -399,35 +399,92 @@ ipcMain.handle('process-uploads', async (event, files, forceAi) => {
         const tasks = files.map(async (file) => {
             const destPath = path.join(watchFolder, file.name);
             try {
-                // Use async copy
-                await fs.promises.copyFile(file.path, destPath);
-                
                 const crypto = require('crypto');
                 const normalizedName = file.name.normalize('NFC');
                 const fileId = crypto.createHash('sha256').update(normalizedName).digest('hex').substring(0, 24);
                 const ext = path.extname(file.name).toLowerCase();
                 const type = ext === '.pdf' ? 'PDF' : 'IMAGE';
                 
-                if (forceAi) {
-                    const sentinelDir = path.join(watchFolder, '.archiva');
-                    if (!fs.existsSync(sentinelDir)) fs.mkdirSync(sentinelDir);
-                    fs.writeFileSync(path.join(sentinelDir, `force_ai_${fileId}.tmp`), '1', 'utf8');
-                }
+                // Copy file to watch folder
+                await fs.promises.copyFile(file.path, destPath);
 
-                return new Promise((resolve) => {
+                // Insert DB record with 'processing' status
+                await new Promise((resolve, reject) => {
                     db.run(
                         `INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                         [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing'],
                         (err) => {
                             if (err) {
                                 console.error(`[DB] Insert error for ${file.name}:`, err);
-                                resolve({ success: false, error: err.message });
+                                reject(err);
                             } else {
-                                resolve({ success: true });
+                                resolve();
                             }
                         }
                     );
                 });
+
+                // Directly spawn Python to analyze this file with AI (bypass watcher)
+                // This guarantees AI analysis regardless of auto-analysis toggle state
+                let executable, args;
+                if (app.isPackaged) {
+                    executable = path.join(process.resourcesPath, 'backend', 'watcher.exe');
+                    args = ['--process-file', destPath, watchFolder, '--id', fileId];
+                } else {
+                    executable = process.platform === 'win32'
+                        ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
+                        : path.join(__dirname, 'venv', 'bin', 'python');
+                    args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', destPath, watchFolder, '--id', fileId];
+                }
+
+                const pyProcess = spawn(executable, args, {
+                    env: {
+                        ...process.env,
+                        PYTHONIOENCODING: 'utf-8',
+                        PYTHONUTF8: '1',
+                        OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free',
+                        SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
+                        PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0'
+                    }
+                });
+
+                activeProcesses.add(pyProcess);
+                pyProcess.on('exit', () => activeProcesses.delete(pyProcess));
+
+                pyProcess.stdout.on('data', (d) => {
+                    const lines = d.toString().split('\n');
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if (!trimmed) return;
+                        console.log(`Python[upload]: ${trimmed}`);
+                        if (trimmed.startsWith('{')) {
+                            try {
+                                const json = JSON.parse(trimmed);
+                                if (json.type === 'needs_confirmation') {
+                                    mainWindow.webContents.send('ask-project-similarity', {
+                                        docData: json.doc_data,
+                                        similar: json.similar,
+                                        newProject: json.new_project
+                                    });
+                                } else if (json.type === 'sync_complete') {
+                                    checkBatchProgress(json.doc_id);
+                                    sendUpdateToRenderer();
+                                } else if (json.type === 'status') {
+                                    mainWindow.webContents.send('status-update', json);
+                                } else {
+                                    sendUpdateToRenderer();
+                                }
+                            } catch(e) {}
+                        }
+                    });
+                });
+
+                pyProcess.stderr.on('data', (d) => {
+                    console.error(`Python[upload] Error: ${d.toString()}`);
+                });
+
+                return { success: true };
             } catch (err) {
                 console.error(`[FS] Error processing ${file.name}:`, err);
                 return { success: false, error: err.message };
@@ -776,7 +833,7 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         PYTHONIOENCODING: 'utf-8',
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free'
                     }
                 });
                 
@@ -893,7 +950,7 @@ const pdfParse = require('pdf-parse');
 
 ipcMain.handle('ai-chat', async (event, messages) => {
     const apiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.AI_MODEL || 'google/gemini-2.0-flash-001';
+    const model = process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free';
 
     if (!apiKey) {
         return { error: 'API Key is missing. Please set OPENROUTER_API_KEY in the .env file.' };
@@ -1038,7 +1095,7 @@ ipcMain.handle('import-folder', async (event, folderPath) => {
                 PYTHONIOENCODING: 'utf-8',
                 PYTHONUTF8: '1',
                 OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-001'
+                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free'
             }
         });
 
