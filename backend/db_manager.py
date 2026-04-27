@@ -53,7 +53,7 @@ def initialize_db():
     ''')
     
     # Migration: Add columns if they don't exist (safe for older DBs)
-    for col in ['file', 'class', 'area', 'sha256', 'status', 'subject', 'project', 'doc_date', 'version_no', 'summary', 'intel_card']:
+    for col in ['file', 'class', 'area', 'sha256', 'status', 'subject', 'project', 'doc_date', 'version_no', 'summary', 'intel_card', 'governorate']:
         try:
             cursor.execute(f"ALTER TABLE documents ADD COLUMN {col} TEXT")
         except:
@@ -77,8 +77,8 @@ def add_document(doc_data):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, subject, project, doc_date, version_no, intel_card)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, subject, project, doc_date, version_no, intel_card, governorate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         doc_data['id'],
         doc_data.get('file', ''),
@@ -97,7 +97,8 @@ def add_document(doc_data):
         doc_data.get('project', ''),
         doc_data.get('doc_date', ''),
         doc_data.get('version_no', ''),
-        doc_data.get('intel_card', '')
+        doc_data.get('intel_card', ''),
+        doc_data.get('governorate', '')
     ))
     conn.commit()
     conn.close()

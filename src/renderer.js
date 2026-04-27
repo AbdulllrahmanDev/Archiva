@@ -1752,7 +1752,9 @@ function selectDocument(id, isSoftUpdate = false) {
                     <span class="h-px flex-1 bg-outline-variant/10"></span>
                 </div>
                 
-                <h2 class="font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere">
+                <h2 id="main-doc-title-${doc.id}" class="field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere cursor-context-menu" 
+                    oncontextmenu="event.preventDefault(); !${isProcessing} && openFieldEditor(this.parentElement, '${doc.id}', 'title', \`${(doc.title || '').replace(/`/g, "'")}\`, '${currentLang === 'ar' ? 'العنوان' : 'Title'}')"
+                    title="${!isProcessing ? (currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit') : ''}">
                     ${isProcessing ? (doc.file?.replace(/_/g, ' ').replace(/-/g, ' ') || 'Intelligence Extraction...') : doc.title}
                 </h2>
                 
@@ -1787,6 +1789,17 @@ function selectDocument(id, isSoftUpdate = false) {
 
                         </div>
                         <p class="field-value text-sm font-bold text-on-surface leading-snug pl-7">${doc.project || '—'}</p>
+                    </div>
+
+                    <!-- المحافظة -->
+                    <div id="field-governorate-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'governorate', \`${(doc.governorate || '').replace(/`/g, "'")}\`, '${currentLang === 'ar' ? 'المحافظة' : 'Governorate'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <div class="flex items-center gap-2">
+                                <div class="text-primary/40 group-hover/field:text-primary transition-colors">${getIcon('map', 'xs')}</div>
+                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40">${currentLang === 'ar' ? 'المحافظة' : 'Governorate'}</span>
+                            </div>
+                        </div>
+                        <p class="field-value text-sm font-bold text-on-surface leading-snug pl-7">${doc.governorate || '—'}</p>
                     </div>
 
                     <!-- التاريخ ورقم المرجع (Dynamic Expanding Layout) -->
@@ -1945,29 +1958,48 @@ function selectDocument(id, isSoftUpdate = false) {
 }
 
 
+const egyptGovernorates = [
+    "غير_محددة", "القاهرة", "الجيزة", "الإسكندرية", "الدقهلية", "البحر الأحمر", "البحيرة", "الفيوم", "الغربية", "الإسماعيلية", "المنوفية", "المنيا", "القليوبية", "الوادي الجديد", "الشرقية", "السويس", "أسوان", "أسيوط", "بني سويف", "بورسعيد", "دمياط", "جنوب سيناء", "كفر الشيخ", "مطروح", "الأقصر", "قنا", "شمال سيناء", "سوهاج"
+];
+
 // ============================================================
 // INLINE FIELD EDITOR (Right-click to edit)
 // ============================================================
 window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldLabel) {
     // Prevent double-opening
-    if (cardEl.querySelector('input, textarea')) return;
+    if (cardEl.querySelector('input, textarea, select')) return;
 
     const valueEl = cardEl.querySelector('.field-value');
     if (!valueEl) return;
 
     const isMultiline = ['subject', 'project'].includes(fieldKey);
-    const inputEl = document.createElement(isMultiline ? 'textarea' : 'input');
+    const isGovernorate = fieldKey === 'governorate';
+    
+    let inputEl;
+    if (isGovernorate) {
+        inputEl = document.createElement('select');
+        egyptGovernorates.forEach(gov => {
+            const opt = document.createElement('option');
+            opt.value = gov;
+            opt.textContent = gov;
+            if (gov === currentValue) opt.selected = true;
+            inputEl.appendChild(opt);
+        });
+    } else {
+        inputEl = document.createElement(isMultiline ? 'textarea' : 'input');
+        inputEl.value = (currentValue === '—' || !currentValue) ? '' : currentValue;
+        inputEl.placeholder = `${currentLang === 'ar' ? 'أدخل' : 'Enter'} ${fieldLabel}...`;
+        if (isMultiline) inputEl.rows = 2;
+    }
 
     // Style to match the card
-    inputEl.value = (currentValue === '—' || !currentValue) ? '' : currentValue;
-    inputEl.className = `w-full bg-transparent text-sm font-bold text-on-surface outline-none border-b-2 border-primary resize-none mt-1 placeholder:text-on-surface-variant/30 ${isMultiline ? 'min-h-[3rem]' : ''}`;
-    inputEl.placeholder = `${currentLang === 'ar' ? 'أدخل' : 'Enter'} ${fieldLabel}...`;
-    if (isMultiline) inputEl.rows = 2;
+    inputEl.className = `w-full bg-surface-container-high text-sm font-bold text-on-surface outline-none border-b-2 border-primary resize-none mt-1 placeholder:text-on-surface-variant/30 ${isMultiline ? 'min-h-[3rem]' : ''}`;
+    if (isGovernorate) inputEl.classList.add('py-1', 'px-2', 'rounded-lg');
 
     // Replace value text with input
     valueEl.replaceWith(inputEl);
     inputEl.focus();
-    inputEl.select();
+    if (!isGovernorate) inputEl.select();
 
     // Highlight the card
     cardEl.classList.add('border-primary/40', 'bg-primary/5');

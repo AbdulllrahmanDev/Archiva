@@ -182,7 +182,9 @@ def real_ai_analyze(text, filename, file_path=None):
       مثال: إذا كان الموضوع "شبكة مياه المدينة العمالية"، فإن المشروع هو "المدينة العمالية". 
       مثال: إذا كان الخطاب مرسل بخصوص "مبنى إدارة المرور"، فإن المشروع هو "مبنى إدارة المرور".
     - ابحث عن أسماء (مدن، أحياء، كباري، مستشفيات، جهات، أو أي كيان مادي) واعتبره هو المشروع. 
-    - إذا فشلت تماماً في إيجاد أي إشارة لكيان أو مكان، حينها فقط اكتب 'عام'.
+    - استخرج "المحافظة" (Governorate) التي يقع فيها المشروع أو التي تتبعها الجهة (مثلاً: القاهرة، الإسكندرية، الجيزة، الخ).
+    - إذا لم تذكر المحافظة صراحة، حاول استنتاجها من اسم المشروع أو الجهة (مثلاً: "حي المعادي" يتبع محافظة "القاهرة").
+    - إذا فشلت تماماً في إيجاد أي إشارة لكيان أو مكان للمشروع، حينها فقط اكتب 'عام' للمشروع و 'غير محددة' للمحافظة.
     - استخرج "رقم الصادر/الوارد" كـ version_no.
 
     محتوى النص المستخرج (للمساعدة):
@@ -192,6 +194,7 @@ def real_ai_analyze(text, filename, file_path=None):
     {{
       "subject": "موضوع الوثيقة بدقة",
       "project": "اسم المشروع (أو 'عام')",
+      "governorate": "اسم المحافظة (أو 'غير محددة')",
       "doc_date": "YYYY-MM-DD",
       "version_no": "رقم الخطاب الأصلي",
       "title": "عنوان قصير مناسب للملف",
@@ -314,6 +317,7 @@ def real_ai_analyze(text, filename, file_path=None):
                 patterns = {
                     "subject": r'"subject"\s*:\s*"([^"]*)"',
                     "project": r'"project"\s*:\s*"([^"]*)"',
+                    "governorate": r'"governorate"\s*:\s*"([^"]*)"',
                     "doc_date": r'"doc_date"\s*:\s*"([^"]*)"',
                     "version_no": r'"version_no"\s*:\s*"([^"]*)"',
                     "title": r'"title"\s*:\s*"([^"]*)"',
@@ -359,6 +363,9 @@ def real_ai_analyze(text, filename, file_path=None):
             )
             ai_data["project"] = strip_field_label(
                 ai_data.get("project", ""), ["المشروع", "الجهة", "project", "Project"]
+            )
+            ai_data["governorate"] = strip_field_label(
+                ai_data.get("governorate", ""), ["المحافظة", "محافظة", "governorate", "Governorate"]
             )
             # For date: only strip if has explicit label prefix, don't strip valid dates
             raw_date = ai_data.get("doc_date", "") or ""
@@ -579,6 +586,7 @@ def mock_ai_analyze(text, filename):
         "title": readable_title,
         "subject": readable_title,   # FIX: use readable title so file gets moved & renamed
         "project": "غير_محدد",       # FIX: explicit fallback so organize_file_copy always has a project
+        "governorate": "غير_محددة",
         "doc_date": "",
         "version_no": "",
         "type": file_format,
@@ -754,13 +762,33 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
             # ── 3. بناء مسار السنة للبحث عن مجلد مطابق ─────────────────────
             year_dir = os.path.join(base_archive_path, year)
             os.makedirs(year_dir, exist_ok=True)
-            project = find_smart_project_match(project_raw, year_dir, use_fuzzy=smart_match)
+            
+            # ── 3.1. تحديد المحافظة ──────────────────────────────────────────
+            gov_raw = (doc_data.get("governorate") or "").strip()
+            if gov_raw.lower() in TRULY_UNKNOWN_VALUES:
+                governorate = "غير_محددة"
+            else:
+                governorate = sanitize_folder_name(gov_raw)
+            
+            gov_dir = os.path.join(year_dir, governorate)
+            os.makedirs(gov_dir, exist_ok=True)
+
+            project = find_smart_project_match(project_raw, gov_dir, use_fuzzy=smart_match)
             if isinstance(project, dict) and project.get("needs_confirmation"):
+                # Pass governorate back in the needs_confirmation dict if needed
+                project["governorate"] = governorate
                 return project
-            print(f"Organize: Project resolved to '{project}' (from '{project_raw}')", flush=True)
+            print(f"Organize: Project resolved to '{project}' (from '{project_raw}') in Gov '{governorate}'", flush=True)
 
         # ── 4. بناء مسار المجلد الهدف ──────────────────────────────────────
-        target_dir = os.path.join(base_archive_path, year, project)
+        # الهيكل الجديد: السنة / المحافظة / المشروع
+        if project in ("عام", "غير_محدد"):
+             # For general/unknown projects, we might skip the governorate level or keep it
+             # Let's keep it consistent: Year / Governorate / Project
+             target_dir = os.path.join(base_archive_path, year, governorate if 'governorate' in locals() else "غير_محددة", project)
+        else:
+             target_dir = os.path.join(base_archive_path, year, governorate, project)
+        
         os.makedirs(target_dir, exist_ok=True)
 
         # ── 5. تحديد اسم الملف الجديد من "الموضوع" ────────────────────────

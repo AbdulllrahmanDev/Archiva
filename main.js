@@ -604,7 +604,7 @@ ipcMain.handle('get-documents', async () => {
 });
 
 ipcMain.handle('update-document', async (event, id, fields) => {
-    const allowedFields = ['subject', 'project', 'doc_date', 'version_no', 'title', 'summary'];
+    const allowedFields = ['subject', 'project', 'doc_date', 'version_no', 'title', 'summary', 'governorate'];
     const updates = Object.entries(fields).filter(([k]) => allowedFields.includes(k));
     if (updates.length === 0) return { success: false, error: 'No valid fields' };
 
@@ -617,6 +617,7 @@ ipcMain.handle('update-document', async (event, id, fields) => {
             if (fields.subject !== undefined && fields.subject !== doc.subject) needsReorganize = true;
             if (fields.project !== undefined && fields.project !== doc.project) needsReorganize = true;
             if (fields.doc_date !== undefined && fields.doc_date !== doc.doc_date) needsReorganize = true;
+            if (fields.governorate !== undefined && fields.governorate !== doc.governorate) needsReorganize = true;
             
             const updatedDoc = { ...doc, ...fields };
             
@@ -673,8 +674,19 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     } else {
         project = projectRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "غير_محدد";
     }
+
+    // Determine governorate folder
+    let govRaw = (docData.governorate || "").trim();
+    const trulyUnknownGov = ["", "غير محدد", "غير_محدد", "غير محددة", "غير_محددة", "n/a", "unknown"];
+    let governorate;
+    if (trulyUnknownGov.includes(govRaw.toLowerCase())) {
+        governorate = "غير_محددة";
+    } else {
+        governorate = govRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "غير_محددة";
+    }
     
-    const targetDir = path.join(baseFolder, year, project);
+    // New hierarchy: Year / Governorate / Project
+    const targetDir = path.join(baseFolder, year, governorate, project);
     if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
     }
@@ -747,7 +759,13 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
             const oldSidecar = docData.file_path.replace(new RegExp(`\\${ext}$`), '.json');
             const newSidecar = targetPath.replace(new RegExp(`\\${ext}$`), '.json');
             if (fs.existsSync(oldSidecar)) {
+                if (process.platform === 'win32') {
+                    try { require('child_process').execSync(`attrib -h "${oldSidecar}"`); } catch(e) {}
+                }
                 fs.renameSync(oldSidecar, newSidecar);
+                if (process.platform === 'win32') {
+                    try { require('child_process').exec(`attrib +h "${newSidecar}"`, () => {}); } catch(e) {}
+                }
             }
             docData.file_path = targetPath;
             docData.file = newFilename;
@@ -764,12 +782,21 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     const sidecarData = { ...docData };
     delete sidecarData.content; // Never store large content in sidecar JSON
     sidecarData.content_preview = docData.content ? docData.content.substring(0, 500) : "";
+    
     try {
-        fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
-        if (process.platform === 'win32') {
-            require('child_process').exec(`attrib +h "${sidecarPath}"`, () => {});
+        // On Windows, writing to a HIDDEN file throws EPERM. Un-hide first if exists.
+        if (process.platform === 'win32' && fs.existsSync(sidecarPath)) {
+            try { require('child_process').execSync(`attrib -h "${sidecarPath}"`); } catch(e) {}
         }
-    } catch(e) { console.error("Error saving sidecar:", e); }
+        
+        fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
+        
+        if (process.platform === 'win32') {
+            try { require('child_process').exec(`attrib +h "${sidecarPath}"`, () => {}); } catch(e) {}
+        }
+    } catch(e) { 
+        console.error("Error saving sidecar:", e); 
+    }
 
     return new Promise((resolve) => {
         // Prepare tags
@@ -777,17 +804,17 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
         
         db.run(
             `INSERT OR REPLACE INTO documents 
-            (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, intel_card, subject, project, doc_date, version_no) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [docData.id, docData.file, docData.file_path, docData.title, docData.date_added, docData.type, docData.class, docData.area, tagsJson, docData.summary, docData.content || "", docData.sha256 || "", 'ready', docData.intel_card || "", docData.subject, docData.project, docData.doc_date, docData.version_no],
+            (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, intel_card, subject, project, doc_date, version_no, governorate) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [docData.id, docData.file, docData.file_path, docData.title, docData.date_added, docData.type, docData.class, docData.area, tagsJson, docData.summary, docData.content || "", docData.sha256 || "", 'ready', docData.intel_card || "", docData.subject, docData.project, docData.doc_date, docData.version_no, docData.governorate || ""],
             (err) => {
                 if (err) console.error("DB Insert error:", err);
                 sendUpdateToRenderer();
                 
                 // Finish syncing status
                 if (mainWindow) {
-                    mainWindow.webContents.send('status-update', { type: "sync_complete", doc_id: docData.id });
-                    mainWindow.webContents.send('status-update', { type: "status_idle", progress: 0 });
+                    mainWindow.webContents.send('status-update', { type: "status", msg: "sync_complete", doc_id: docData.id });
+                    mainWindow.webContents.send('status-update', { type: "status", msg: "status_idle", progress: 0 });
                 }
                 
                 checkBatchProgress(docData.id);
