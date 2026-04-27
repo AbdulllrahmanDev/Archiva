@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, Menu, dialog, shell, nativeTheme } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -1465,16 +1466,9 @@ ipcMain.handle('toggle-smart-project', async (event, enabled) => {
     return { success: true, enabled };
 });
 
-
-/**
- * Write control sentinel files into the watch folder.
- * watcher.py polls these files to know the current auto-analysis state.
- * No backend restart needed — state change takes effect within ~2 seconds.
- */
 function writeSentinelFiles(enabled, activatedAt, splitEnabled, smartMatchEnabled) {
     if (!watchFolder || !fs.existsSync(watchFolder)) return;
 
-    const sentinelDir  = path.join(watchFolder, '.archiva');
     const enabledFile  = path.join(sentinelDir, 'auto_analysis_enabled');
     const tsFile       = path.join(sentinelDir, 'activation_timestamp');
     const splitFile    = path.join(sentinelDir, 'pdf_split_enabled');
@@ -1488,18 +1482,62 @@ function writeSentinelFiles(enabled, activatedAt, splitEnabled, smartMatchEnable
             fs.writeFileSync(tsFile, activatedAt || '', 'utf8');
         } else {
             fs.writeFileSync(enabledFile, '0', 'utf8');
-            // Keep the timestamp file gone so next enable gets fresh ts
             if (fs.existsSync(tsFile)) fs.unlinkSync(tsFile);
         }
 
-        // PDF Split sentinel
         fs.writeFileSync(splitFile, splitEnabled ? '1' : '0', 'utf8');
-
-        // Smart Project Matching sentinel
         fs.writeFileSync(smartFile, smartMatchEnabled ? '1' : '0', 'utf8');
 
-        console.log(`Sentinel files updated: auto=${enabled}, ts=${activatedAt || 'N/A'}, split=${splitEnabled}, smart=${smartMatchEnabled}`);
+        console.log("Sentinel files updated successfully.");
     } catch (e) {
         console.error('Error writing sentinel files:', e);
     }
 }
+
+// ============================================================
+// AUTO-UPDATE SYSTEM
+// ============================================================
+
+function setupAutoUpdater() {
+    // Check for updates every 1 hour
+    setInterval(() => {
+        autoUpdater.checkForUpdates();
+    }, 60 * 60 * 1000);
+
+    // Immediate check on startup
+    autoUpdater.checkForUpdatesAndNotify();
+
+    autoUpdater.on('update-available', () => {
+        if (mainWindow) mainWindow.webContents.send('update_available');
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        console.log('Update not available.');
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+        if (mainWindow) mainWindow.webContents.send('update_downloaded');
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('Update Error:', err);
+    });
+}
+
+ipcMain.on('restart_app', () => {
+    autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('check-for-updates-manual', async () => {
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        return { success: true, updateInfo: result.updateInfo };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// Initialize on app start
+app.whenReady().then(() => {
+    setupAutoUpdater();
+});

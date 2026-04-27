@@ -58,5 +58,11 @@ contextBridge.exposeInMainWorld('api', {
     onBatchProgress: (callback) => {
         ipcRenderer.removeAllListeners('batch-progress');
         ipcRenderer.on('batch-progress', (event, data) => callback(data));
-    }
+    },
+
+    // Auto-Update Events
+    onUpdateAvailable: (callback) => ipcRenderer.on('update_available', () => callback()),
+    onUpdateDownloaded: (callback) => ipcRenderer.on('update_downloaded', () => callback()),
+    restartApp: () => ipcRenderer.send('restart_app'),
+    checkForUpdatesManual: () => ipcRenderer.invoke('check-for-updates-manual')
 });

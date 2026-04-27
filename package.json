@@ -15,6 +15,13 @@
     "directories": {
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "AbdulllrahmanDev",
+        "repo": "Archiva"
+      }
+    ],
     "win": {
       "target": "portable",
       "icon": ".icon-ico/icon.ico"
