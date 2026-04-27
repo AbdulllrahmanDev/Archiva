@@ -165,6 +165,7 @@ const i18n = {
         step_analyze: "AI Analysis",
         step_organize: "Organize",
         step_ready: "Ready",
+        stop_analysis: "Stop Analysis",
         smart_project_label: "Smart Project Matching",
         smart_project_desc: "Automatically group similar projects (e.g., Cairo water vs Cairo sewage)",
         smart_project_enabled_toast: "Smart Project Matching enabled.",
@@ -253,6 +254,7 @@ const i18n = {
         smart_project_enabled_toast: "تم تفعيل الربط الذكي للمشاريع.",
         smart_project_disabled_toast: "تم إيقاف الربط الذكي للمشاريع.",
         stop_label: "إيقاف إجباري",
+        stop_analysis: "إيقاف التحليل",
         similarity_title: "تشابه في اسم المشروع",
         use_similar_btn: "استخدام المجلد الموجود",
         create_new_btn: "إنشاء مجلد جديد",
@@ -1859,11 +1861,19 @@ function selectDocument(id, isSoftUpdate = false) {
                         <button class="flex-1 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dim active:scale-95 transition-all flex items-center justify-center gap-2" onclick="window.api.openPath('${doc.file_path.replace(/\\/g, '\\\\')}')">
                             <span>${t('open_file')}</span>
                         </button>
+                        ${isProcessing ? `
+                        <button id="stop-analyze-btn" class="w-14 h-14 bg-error/10 text-error flex items-center justify-center rounded-xl hover:bg-error/20 active:scale-95 transition-all group/stop border border-error/20 shadow-lg shadow-error/5" title="${t('stop_analysis')}">
+                            <div class="group-hover/stop:scale-110 transition-transform duration-500">
+                                ${getIcon('close', 'sm')}
+                            </div>
+                        </button>
+                        ` : `
                         <button id="re-analyze-btn" class="w-14 h-14 bg-primary/5 text-primary flex items-center justify-center rounded-xl hover:bg-primary/20 active:scale-95 transition-all group/re border border-primary/20 shadow-lg shadow-primary/5" title="${currentLang === 'ar' ? 'تحليل ذكي' : 'AI Analysis'}">
                             <div class="group-hover/re:scale-110 group-hover/re:rotate-[15deg] transition-transform duration-500">
                                 ${getIcon('auto_awesome', 'sm')}
                             </div>
                         </button>
+                        `}
                     </div>
                     <button class="col-span-2 py-4 border border-outline-variant/10 text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-high active:scale-95 transition-all export-action-btn flex items-center justify-center gap-2">
                         <span>${t('export')}</span>
@@ -1911,6 +1921,21 @@ function selectDocument(id, isSoftUpdate = false) {
                 // Switch local UI instantly while waiting for backend
                 doc.status = 'processing';
                 selectDocument(doc.id, true); // use soft update
+            };
+        }
+
+        const stopBtn = detailsContainer.querySelector('#stop-analyze-btn');
+        if (stopBtn && isProcessing) {
+            stopBtn.onclick = async (e) => {
+                e.stopPropagation();
+                stopBtn.classList.add('bg-error/20', 'scale-95');
+                setTimeout(() => stopBtn.classList.remove('bg-error/20', 'scale-95'), 150);
+                
+                await window.api.stopProcessing(doc.id);
+                
+                // Switch local UI back to idle
+                doc.status = 'idle';
+                selectDocument(doc.id, true);
             };
         }
 
@@ -1986,7 +2011,16 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         try {
             const result = await window.api.updateDocument(docId, { [fieldKey]: newValue });
             if (result.success) {
-                // Update display
+                // 1. تحديث المصفوفة المحلية فوراً
+                const docIndex = documents.findIndex(d => d.id == docId);
+                if (docIndex !== -1) {
+                    documents[docIndex][fieldKey] = newValue;
+                    // إذا تم تغيير الموضوع، قد يتغير المسار أيضاً، لذا نحتاج لتحديثه إذا أرسله السيرفر
+                    if (result.newPath) documents[docIndex].file_path = result.newPath;
+                    if (result.newFile) documents[docIndex].file = result.newFile;
+                }
+
+                // 2. تحديث عرض القيمة في الواجهة
                 const p = document.createElement('p');
                 p.className = `field-value ${isMultiline ? 'text-sm' : 'text-xs'} font-bold text-on-surface leading-snug`;
                 if (fieldKey === 'version_no') p.classList.add('text-primary');
@@ -1995,12 +2029,13 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 actions.remove();
                 cardEl.classList.remove('border-primary/40', 'bg-primary/5');
                 cardEl.classList.add('hover:border-primary/20');
+                
                 showToast('storage_updated');
-                // Update local cache
-                const doc = documents.find(d => d.id == docId);
-                if (doc) doc[fieldKey] = newValue;
+
+                // 3. إعادة تحديث العرض الرئيسي لضمان ترتيب البيانات أو البحث
+                renderArchiveView(document.getElementById('global-search-input')?.value || '');
             } else {
-                showToast('delete_confirm'); // fallback toast
+                showToast('Error: ' + result.error);
                 cancelFn();
             }
         } catch (e) {

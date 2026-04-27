@@ -114,8 +114,18 @@ class ArchiveHandler(FileSystemEventHandler):
         src_path = unicodedata.normalize('NFC', event.src_path)
         if not self._should_process(src_path):
             return
-        self._mark_seen(src_path)  
-        time.sleep(1) 
+        self._mark_seen(src_path)
+        time.sleep(1)
+
+        # ── Early sidecar check ────────────────────────────────────────────────
+        # If a sidecar (.json) already exists next to the file, this file was
+        # moved WITHIN the archive (project rename / topic move). Skip it entirely
+        # to avoid creating a duplicate DB record.
+        sidecar_early = os.path.splitext(src_path)[0] + '.json'
+        if os.path.exists(sidecar_early):
+            print(f"Watcher: Skipping {os.path.basename(src_path)} — sidecar exists (file moved within archive).", flush=True)
+            return
+
         _processing_lock.add(src_path)
         try:
             # Check if this file is already being processed by a dedicated process
@@ -123,13 +133,19 @@ class ArchiveHandler(FileSystemEventHandler):
             file_name = os.path.basename(src_path)
             normalized_name = unicodedata.normalize("NFC", file_name)
             file_id = hashlib.sha256(normalized_name.encode("utf-8")).hexdigest()[:24]
-            
+
             if get_document_status(file_id) == 'processing':
                 print(f"Watcher: Skipping {file_name} — already being processed by dedicated process.", flush=True)
                 return
 
+            # ── Secondary sidecar check after acquiring lock ───────────────────
+            # Re-check in case the sidecar arrived between the first check and lock.
+            if os.path.exists(sidecar_early):
+                print(f"Watcher: Skipping {file_name} — sidecar arrived (race condition handled).", flush=True)
+                return
+
             skip_ai = not _read_sentinel_enabled()
-            
+
             # Check for force_ai override
             sentinel_dir = os.path.join(self.folder_path, '.archiva')
             force_ai_file = os.path.join(sentinel_dir, f'force_ai_{file_id}.tmp')

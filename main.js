@@ -664,8 +664,15 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     const year = (dateStr.includes('-') && dateStr.length >= 4) ? dateStr.split('-')[0] : new Date().getFullYear().toString();
     
     let projectRaw = (docData.project || "").trim();
-    const unknownProjects = ["", "عام", "غير محدد", "غير_محدد", "n/a", "unknown"];
-    let project = unknownProjects.includes(projectRaw.toLowerCase()) ? "غير_محدد" : projectRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "غير_محدد";
+    const trulyUnknownProjects = ["", "غير محدد", "غير_محدد", "n/a", "unknown"];
+    let project;
+    if (trulyUnknownProjects.includes(projectRaw.toLowerCase())) {
+        project = "غير_محدد";
+    } else if (projectRaw.toLowerCase() === "عام") {
+        project = "عام";
+    } else {
+        project = projectRaw.replace(/[<>:"/\\|?*]/g, "").trim() || "غير_محدد";
+    }
     
     const targetDir = path.join(baseFolder, year, project);
     if (!fs.existsSync(targetDir)) {
@@ -681,9 +688,55 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     let targetPath = path.join(targetDir, newFilename);
     
     if (targetPath !== docData.file_path && fs.existsSync(targetPath)) {
-        const uniqueSuffix = Date.now() % 10000;
-        newFilename = `${cleanSubject}_${uniqueSuffix}${ext}`;
-        targetPath = path.join(targetDir, newFilename);
+        // ── Check if the existing file is the SAME document ────────────────
+        // (e.g. from a partial previous move where the file arrived but DB wasn't updated)
+        let isSameDoc = false;
+
+        // 1. Check by sidecar ID
+        const existingSidecarPath = targetPath.replace(new RegExp(`\\${ext}$`), '.json');
+        if (fs.existsSync(existingSidecarPath)) {
+            try {
+                const existingData = JSON.parse(fs.readFileSync(existingSidecarPath, 'utf8'));
+                if (existingData.id && existingData.id === docData.id) {
+                    isSameDoc = true;
+                    console.log(`[Organize] Target file is same document (sidecar match), reusing: ${targetPath}`);
+                }
+            } catch(e) {}
+        }
+
+        // 2. Fallback: check by SHA256 hash if available
+        if (!isSameDoc && docData.sha256) {
+            try {
+                const crypto = require('crypto');
+                const buf = fs.readFileSync(targetPath);
+                const hash = crypto.createHash('sha256').update(buf).digest('hex');
+                if (hash === docData.sha256) {
+                    isSameDoc = true;
+                    console.log(`[Organize] Target file is same document (SHA256 match), reusing: ${targetPath}`);
+                }
+            } catch(e) {}
+        }
+
+        if (isSameDoc) {
+            // Same document already at target (partial previous move) —
+            // delete the stale source file/sidecar and repoint to target.
+            if (docData.file_path !== targetPath && fs.existsSync(docData.file_path)) {
+                try {
+                    fs.unlinkSync(docData.file_path);
+                    const oldSc = docData.file_path.replace(new RegExp(`\\${ext}$`), '.json');
+                    if (fs.existsSync(oldSc)) fs.unlinkSync(oldSc);
+                    cleanupEmptyDirsSync(path.dirname(docData.file_path), watchFolder);
+                } catch(e) { console.error('Error cleaning up stale source:', e); }
+            }
+            docData.file_path = targetPath;
+            docData.file = newFilename;
+            // File is already in place — skip the rename below
+        } else {
+            // Different document at target → add suffix to avoid collision
+            const uniqueSuffix = Date.now() % 10000;
+            newFilename = `${cleanSubject}_${uniqueSuffix}${ext}`;
+            targetPath = path.join(targetDir, newFilename);
+        }
     }
     
     if (targetPath !== docData.file_path && fs.existsSync(docData.file_path)) {
@@ -691,8 +744,8 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
             const oldDir = path.dirname(docData.file_path);
             fs.renameSync(docData.file_path, targetPath);
             // Move sidecar if exists
-            const oldSidecar = docData.file_path.replace(new RegExp(`${ext}$`), '.json');
-            const newSidecar = targetPath.replace(new RegExp(`${ext}$`), '.json');
+            const oldSidecar = docData.file_path.replace(new RegExp(`\\${ext}$`), '.json');
+            const newSidecar = targetPath.replace(new RegExp(`\\${ext}$`), '.json');
             if (fs.existsSync(oldSidecar)) {
                 fs.renameSync(oldSidecar, newSidecar);
             }
@@ -896,6 +949,21 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         }
                     });
                 });
+            }
+        });
+    });
+});
+
+ipcMain.handle('stop-processing', async (event, id) => {
+    return new Promise((resolve) => {
+        db.run('UPDATE documents SET status = ? WHERE id = ?', ['idle', id], (err) => {
+            if (err) {
+                console.error('Stop processing error:', err);
+                resolve({ success: false, error: err.message });
+            } else {
+                console.log(`[STOP] Manual stop for document ID: ${id}`);
+                sendUpdateToRenderer();
+                resolve({ success: true });
             }
         });
     });

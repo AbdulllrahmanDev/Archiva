@@ -614,7 +614,31 @@ def normalize_arabic_for_match(text):
     # 3. Yaa vs Alif Maksura (ى -> ي)
     text = re.sub("ى", "ي", text)
     
-    # Remove ONLY extra whitespace, keep single spaces between words
+    # 4. Remove punctuation and symbols (e.g., - _ / \ | . ,)
+    text = re.sub(r'[^\w\s]', ' ', text)
+    
+    # 5. Normalize " و " (waw as separator) - even if attached to the next word
+    text = re.sub(r'\s+و(\w)', r' \1', text)
+    text = re.sub(r'\s+و\s+', ' ', text)
+    
+    # 6. Remove common descriptive words
+    common_words = ["مشروع", "عمليه", "دراسه", "خطاب", "بشان", "تقرير", "مذكره", "ملف"]
+    for word in common_words:
+        text = re.sub(r'\b' + word + r'\b', '', text)
+    
+    # 7. Professional Word Normalization:
+    words = text.split()
+    final_words = []
+    for w in words:
+        if len(w) > 3 and w.startswith("ال"):
+            w = w[2:]
+        if w:
+            final_words.append(w)
+    
+    final_words.sort()
+    text = " ".join(final_words)
+    
+    # Remove ONLY extra whitespace
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -632,7 +656,7 @@ def find_smart_project_match(new_project, year_path, use_fuzzy=True):
         - ANY similarity (substring OR fuzzy ≥ 0.45) → ask user for confirmation
         - No similarity → create new folder
     """
-    FUZZY_AUTO_THRESHOLD    = 0.82   # Smart ON:  auto-merge if score ≥ this
+    FUZZY_AUTO_THRESHOLD    = 0.80   # Smart ON:  auto-merge if score ≥ this
     FUZZY_CONFIRM_THRESHOLD = 0.25   # Smart OFF: ask user if score ≥ this
 
     if not os.path.exists(year_path):
@@ -661,6 +685,16 @@ def find_smart_project_match(new_project, year_path, use_fuzzy=True):
             print(f"Smart Match: Exact match '{new_project}' -> '{d}'", flush=True)
             return d
 
+        # ── 1.5. Substring Match (Case: "نوف وعين" inside "مشروع تطوير نوف وعين") ──
+        if len(new_norm) >= 4 and len(d_norm) >= 4:
+            if (new_norm in d_norm) or (d_norm in new_norm):
+                # Calculate coverage ratio
+                shorter_len = min(len(new_norm), len(d_norm))
+                longer_len = max(len(new_norm), len(d_norm))
+                if (shorter_len / longer_len) >= 0.5: # 50% coverage for substring
+                    print(f"Smart Match: Substring match '{new_project}' <-> '{d}'", flush=True)
+                    return d
+
         # ── 2. Fuzzy score check ──────────────────────────────────────────
         score = difflib.SequenceMatcher(None, new_norm, d_norm).ratio()
         if score > highest_score:
@@ -669,9 +703,8 @@ def find_smart_project_match(new_project, year_path, use_fuzzy=True):
 
     # ── Decision ────────────────────────────────────────────────────────────
     if use_fuzzy:
-        # Smart Matching ON: merge automatically ONLY when VERY confident
-        # Increased threshold to 0.90 to prevent project nesting/mixing
-        if highest_score >= 0.90:
+        # Smart Matching ON: merge automatically when confident
+        if highest_score >= FUZZY_AUTO_THRESHOLD:
             print(f"Smart Match (auto): fuzzy {highest_score:.2f} '{new_project}' -> '{best_match}'", flush=True)
             return best_match
         
