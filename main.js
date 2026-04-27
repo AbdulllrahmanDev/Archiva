@@ -949,11 +949,19 @@ ipcMain.handle('delete-multiple-documents', async (event, docs) => {
 const pdfParse = require('pdf-parse');
 
 ipcMain.handle('ai-chat', async (event, messages) => {
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const rawApiKey = process.env.OPENROUTER_API_KEY;
     const model = process.env.AI_MODEL || 'google/gemini-2.0-flash-exp:free';
 
-    if (!apiKey) {
+    if (!rawApiKey) {
         return { error: 'API Key is missing. Please set OPENROUTER_API_KEY in the .env file.' };
+    }
+
+    // Load Balancing: Pick a random API key if multiple are provided
+    const apiKeys = rawApiKey.split(',').map(k => k.trim()).filter(k => k);
+    const apiKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
+
+    if (!apiKey) {
+         return { error: 'Invalid API Key format in .env file.' };
     }
 
     try {

@@ -129,11 +129,18 @@ def get_file_base64(file_path):
 
 def real_ai_analyze(text, filename, file_path=None):
     """Call OpenRouter API to analyze the document content using Multimodal Vision."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
+    api_key_raw = os.environ.get("OPENROUTER_API_KEY")
     ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-exp:free")
 
-    if not api_key:
+    if not api_key_raw:
         print("Error: OPENROUTER_API_KEY is missing in background process.", flush=True)
+        return None
+
+    # Load Balancing: Pick a random API key if multiple are provided
+    api_keys = [k.strip() for k in api_key_raw.split(',') if k.strip()]
+    api_key = random.choice(api_keys) if api_keys else None
+    
+    if not api_key:
         return None
 
     # Limit text to 6000 chars for speed and context window safety in background
@@ -392,9 +399,16 @@ def real_ai_analyze(text, filename, file_path=None):
 
 def ai_detect_pdf_splits(file_path, filename):
     """Calls AI to detect if a PDF contains multiple documents and identify page ranges."""
-    api_key = os.environ.get("OPENROUTER_API_KEY")
+    api_key_raw = os.environ.get("OPENROUTER_API_KEY")
     ai_model = os.environ.get("AI_MODEL", "google/gemini-2.0-flash-exp:free")
 
+    if not api_key_raw:
+        return None
+
+    # Load Balancing
+    api_keys = [k.strip() for k in api_key_raw.split(',') if k.strip()]
+    api_key = random.choice(api_keys) if api_keys else None
+    
     if not api_key:
         return None
 
