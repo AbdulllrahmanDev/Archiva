@@ -764,7 +764,7 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
             
             # ── 3.1. تحديد المحافظة ──────────────────────────────────────────
             gov_raw = (doc_data.get("governorate") or "").strip()
-            if gov_raw.lower() in TRULY_UNKNOWN_VALUES:
+            if gov_raw.lower() in TRULY_UNKNOWN_VALUES or gov_raw == "مصر":
                 governorate = "غير_محددة"
             else:
                 governorate = sanitize_folder_name(gov_raw)
@@ -1022,6 +1022,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
             "area": ai_data.get("area", "غير محدد"),
             "tags": ai_data.get("tags", []),
             "summary": ai_data.get("summary", ""),
+            "governorate": ai_data.get("governorate", "غير محددة"),
             "intel_card": ai_data.get("intel_card", ""),
             "content": content,
             "sha256": file_hash,
@@ -1034,11 +1035,13 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         organized_path = organize_file_copy(doc_data, output_folder, smart_match=smart_match)
         
         if isinstance(organized_path, dict) and organized_path.get("needs_confirmation"):
-            report_status("needs_confirmation", 90, doc_id=file_id, extra={
+            print(json.dumps({
+                "type": "needs_confirmation",
+                "doc_id": file_id,
                 "doc_data": doc_data,
                 "similar": organized_path["similar"],
                 "new_project": organized_path["new"]
-            })
+            }, ensure_ascii=False), flush=True)
             return None # Let Node.js handle it after user confirmation
 
         # ── Critical: Only proceed if file was successfully organized ──────

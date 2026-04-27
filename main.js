@@ -638,11 +638,17 @@ ipcMain.handle('update-document', async (event, id, fields) => {
                         try {
                             const ext = path.extname(doc.file);
                             const sidecarPath = doc.file_path.replace(new RegExp(`${ext}$`), '.json');
-                            if (fs.existsSync(sidecarPath)) {
-                                let sidecarData = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
-                                Object.assign(sidecarData, fields);
-                                fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
-                            }
+                                if (fs.existsSync(sidecarPath)) {
+                                    // Windows Fix: Temporarily un-hide and remove read-only to prevent EPERM
+                                    try { execSync(`attrib -r -h "${sidecarPath}"`); } catch(e) {}
+                                    
+                                    let sidecarData = JSON.parse(fs.readFileSync(sidecarPath, 'utf8'));
+                                    Object.assign(sidecarData, fields);
+                                    fs.writeFileSync(sidecarPath, JSON.stringify(sidecarData, null, 2), 'utf8');
+                                    
+                                    // Restore hidden attribute
+                                    try { execSync(`attrib +h "${sidecarPath}"`); } catch(e) {}
+                                }
                         } catch(e) { console.error("Error updating sidecar:", e); }
                         sendUpdateToRenderer();
                         resolve({ success: true });
@@ -754,7 +760,19 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
     if (targetPath !== docData.file_path && fs.existsSync(docData.file_path)) {
         try {
             const oldDir = path.dirname(docData.file_path);
-            fs.renameSync(docData.file_path, targetPath);
+            
+            // Professional Check: Is the file open/locked? (Simplified check by trying to rename)
+            try {
+                fs.renameSync(docData.file_path, targetPath);
+            } catch (moveErr) {
+                let userFriendlyError = "فشل نقل الملف. تأكد أن الملف ليس مفتوحاً في برنامج آخر.";
+                if (moveErr.code === 'EBUSY') userFriendlyError = "الملف قيد الاستخدام حالياً، يرجى إغلاقه والمحاولة مرة أخرى.";
+                if (moveErr.code === 'EPERM') userFriendlyError = "لا توجد صلاحية لنقل الملف، يرجى التأكد من صلاحيات المجلد.";
+                
+                console.error("Move Error:", moveErr);
+                return { success: false, error: userFriendlyError };
+            }
+
             // Move sidecar if exists
             const oldSidecar = docData.file_path.replace(new RegExp(`\\${ext}$`), '.json');
             const newSidecar = targetPath.replace(new RegExp(`\\${ext}$`), '.json');
@@ -762,9 +780,13 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
                 if (process.platform === 'win32') {
                     try { require('child_process').execSync(`attrib -h "${oldSidecar}"`); } catch(e) {}
                 }
-                fs.renameSync(oldSidecar, newSidecar);
-                if (process.platform === 'win32') {
-                    try { require('child_process').exec(`attrib +h "${newSidecar}"`, () => {}); } catch(e) {}
+                try {
+                    fs.renameSync(oldSidecar, newSidecar);
+                    if (process.platform === 'win32') {
+                        try { require('child_process').exec(`attrib +h "${newSidecar}"`, () => {}); } catch(e) {}
+                    }
+                } catch(scErr) {
+                    console.warn("Could not move sidecar:", scErr);
                 }
             }
             docData.file_path = targetPath;
@@ -773,7 +795,8 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
             // Clean up old directory if empty
             cleanupEmptyDirsSync(oldDir, watchFolder);
         } catch(e) {
-            console.error("Error moving file:", e);
+            console.error("Fatal move error:", e);
+            return { success: false, error: "خطأ غير متوقع أثناء تنظيم الملفات." };
         }
     }
 
@@ -819,7 +842,11 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
                 
                 checkBatchProgress(docData.id);
                 
-                resolve({ success: !err });
+                resolve({ 
+                    success: !err, 
+                    newPath: docData.file_path, 
+                    newFile: docData.file 
+                });
             }
         );
     });

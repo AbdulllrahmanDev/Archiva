@@ -1802,7 +1802,10 @@ function selectDocument(id, isSoftUpdate = false) {
                                 <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40">${currentLang === 'ar' ? 'المحافظة' : 'Governorate'}</span>
                             </div>
                         </div>
-                        <p class="field-value text-sm font-bold text-on-surface leading-snug pl-7">${doc.governorate || '—'}</p>
+                        <p class="field-value text-sm font-bold text-on-surface leading-snug pl-7 flex items-center gap-2">
+                            ${doc.governorate === 'غير_محددة' || doc.governorate === 'غير محددة' ? (currentLang === 'ar' ? 'المحافظة غير محددة' : 'Governorate not defined') : (doc.governorate || '—')}
+                            ${doc.governorate === 'غير_محددة' || doc.governorate === 'غير محددة' ? `<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 opacity-70 font-black uppercase tracking-tighter">${currentLang === 'ar' ? 'تنبيه' : 'Alert'}</span>` : ''}
+                        </p>
                     </div>
 
                     <!-- التاريخ ورقم المرجع (Dynamic Expanding Layout) -->
@@ -2004,10 +2007,10 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 item.style.direction = 'rtl'; // Keep text Arabic direction
                 item.style.textAlign = 'right';
                 item.innerHTML = `<span>${gov}</span> ${gov === currentValue ? `<span class="text-primary group-hover:text-white">${getIcon('check', 'xs')}</span>` : ''}`;
-                item.onclick = () => {
+                item.onclick = (e) => {
+                    e.stopPropagation();
                     inputEl.value = gov;
                     customDropdown.classList.add('hidden');
-                    document.getElementById(`save-edit-${fieldKey}`)?.click();
                 };
                 customDropdown.appendChild(item);
             });
@@ -2150,7 +2153,7 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 // 3. إعادة تحديث العرض الرئيسي لضمان ترتيب البيانات أو البحث
                 renderArchiveView(document.getElementById('global-search-input')?.value || '');
             } else {
-                showToast('Error: ' + result.error);
+                showToast(result.error || (currentLang === 'ar' ? 'فشل حفظ التعديلات.' : 'Failed to save changes.'));
                 cancelFn();
             }
         } catch (e) {
@@ -2748,6 +2751,54 @@ function updatePipelineUI() {
             if (label) label.innerText = t(`step_${s}`);
             if (icon) icon.innerHTML = getIcon(s === 'upload' ? 'cloud_upload' : (s === 'analyze' ? 'auto_awesome' : (s === 'organize' ? 'folder_managed' : 'task_alt')));
         }
+    });
+}
+
+// Handle Project Similarity Confirmation
+if (window.api.onProjectSimilarityAsk) {
+    window.api.onProjectSimilarityAsk(async (data) => {
+        const { docData, similar, newProject } = data;
+        
+        // Show a custom confirm dialog for similarity
+        const confirmOverlay = document.createElement('div');
+        confirmOverlay.className = 'fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in';
+        confirmOverlay.innerHTML = `
+            <div class="bg-surface-container-highest border border-outline-variant/10 rounded-[2.5rem] p-10 max-w-lg w-full shadow-2xl space-y-8 animate-scale-in">
+                <div class="flex flex-col items-center text-center space-y-4">
+                    <div class="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                        ${getIcon('folder_managed', 'lg')}
+                    </div>
+                    <h2 class="text-2xl font-black tracking-tight text-on-surface">${t('similarity_title')}</h2>
+                    <p class="text-on-surface-variant leading-relaxed">
+                        ${currentLang === 'ar' 
+                            ? `تم اكتشاف مشروع مشابه موجود بالفعل: <span class="font-bold text-primary">"${similar}"</span>. هل تريد وضعه فيه أم إنشاء مجلد جديد باسم <span class="font-bold">"${newProject}"</span>؟`
+                            : `A similar project was found: <span class="font-bold text-primary">"${similar}"</span>. Do you want to merge it or create a new folder named <span class="font-bold">"${newProject}"</span>?`}
+                    </p>
+                </div>
+                <div class="flex flex-col gap-3">
+                    <button id="similarity-use-existing" class="w-full py-4 bg-primary text-white rounded-2xl font-bold hover:brightness-110 transition-all flex items-center justify-center gap-2">
+                        ${getIcon('folder', 'sm')} ${t('use_similar_btn')}
+                    </button>
+                    <button id="similarity-create-new" class="w-full py-4 bg-surface-container-high text-on-surface rounded-2xl font-bold hover:bg-surface-container-highest transition-all flex items-center justify-center gap-2">
+                        ${getIcon('create_new_folder', 'sm')} ${t('create_new_btn')}
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(confirmOverlay);
+
+        const useExistingBtn = confirmOverlay.querySelector('#similarity-use-existing');
+        const createNewBtn = confirmOverlay.querySelector('#similarity-create-new');
+
+        useExistingBtn.onclick = async () => {
+            confirmOverlay.remove();
+            await window.api.confirmProjectSimilarity(docData, similar);
+        };
+
+        createNewBtn.onclick = async () => {
+            confirmOverlay.remove();
+            await window.api.confirmProjectSimilarity(docData, newProject);
+        };
     });
 }
 
