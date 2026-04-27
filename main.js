@@ -155,9 +155,8 @@ function initStorage() {
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1200,
-        height: 800,
         backgroundColor: '#ffffff',
-        icon: path.join(__dirname, 'logo', 'Archiva-icon.png'),
+        icon: path.join(__dirname, '.icon-ico', 'icon.ico'),
         show: true,
         webPreferences: {
             preload: path.join(__dirname, 'src', 'preload.js'),

@@ -17,7 +17,7 @@
     },
     "win": {
       "target": "portable",
-      "icon": "logo/Archiva-icon.png"
+      "icon": ".icon-ico/icon.ico"
     },
     "portable": {
       "splashImage": "logo/splash.bmp"
@@ -26,8 +26,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "installerIcon": "logo/Archiva-icon.png",
-      "uninstallerIcon": "logo/Archiva-icon.png",
+      "installerIcon": ".icon-ico/icon.ico",
+      "uninstallerIcon": ".icon-ico/icon.ico",
       "runAfterFinish": true
     },
     "appx": {
