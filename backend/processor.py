@@ -130,7 +130,7 @@ def get_file_base64(file_path):
 def real_ai_analyze(text, filename, file_path=None):
     """Call OpenRouter API to analyze the document content using Multimodal Vision."""
     api_key_raw = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-preview:free")
+    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-lite")
 
     if not api_key_raw:
         print("Error: OPENROUTER_API_KEY is missing in background process.", flush=True)
@@ -382,7 +382,7 @@ def real_ai_analyze(text, filename, file_path=None):
 def ai_detect_pdf_splits(file_path, filename):
     """Calls AI to detect if a PDF contains multiple documents and identify page ranges."""
     api_key_raw = os.environ.get("OPENROUTER_API_KEY")
-    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-preview:free")
+    ai_model = os.environ.get("AI_MODEL", "google/gemini-2.5-flash-lite")
 
     if not api_key_raw:
         return None

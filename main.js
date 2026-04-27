@@ -217,7 +217,7 @@ function startBackend() {
             PYTHONIOENCODING: 'utf-8',
             PYTHONUTF8: '1',
             OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free',
+            AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite',
             AUTO_ANALYSIS_ENABLED: autoAnalysisEnabled ? '1' : '0',
             AUTO_ANALYSIS_ACTIVATED_AT: autoAnalysisActivatedAt || '',
             PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0',
@@ -443,7 +443,7 @@ ipcMain.handle('process-uploads', async (event, files, forceAi) => {
                         PYTHONIOENCODING: 'utf-8',
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free',
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite',
                         SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
                         PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0'
                     }
@@ -833,7 +833,7 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         PYTHONIOENCODING: 'utf-8',
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free'
+                        AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite'
                     }
                 });
                 
@@ -950,87 +950,137 @@ const pdfParse = require('pdf-parse');
 
 ipcMain.handle('ai-chat', async (event, messages) => {
     const rawApiKey = process.env.OPENROUTER_API_KEY;
-    const model = process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free';
+    const model = process.env.AI_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
     if (!rawApiKey) {
         return { error: 'API Key is missing. Please set OPENROUTER_API_KEY in the .env file.' };
     }
 
-    // Load Balancing: Pick a random API key if multiple are provided
+    // Build shuffled key list for load balancing + fallback
     const apiKeys = rawApiKey.split(',').map(k => k.trim()).filter(k => k);
-    const apiKey = apiKeys[Math.floor(Math.random() * apiKeys.length)];
-
-    if (!apiKey) {
-         return { error: 'Invalid API Key format in .env file.' };
+    if (apiKeys.length === 0) {
+        return { error: 'Invalid API Key format in .env file.' };
+    }
+    // Shuffle so we don't always hammer the first key
+    for (let i = apiKeys.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [apiKeys[i], apiKeys[j]] = [apiKeys[j], apiKeys[i]];
     }
 
-    try {
-        const supportsVision = ['gemini', 'gpt-4o', 'claude-3', 'pixtral', 'llava', 'vision', 'qwen-vl'].some(m => model.toLowerCase().includes(m));
+    const supportsVision = ['gemini', 'gpt-4o', 'claude-3', 'pixtral', 'llava', 'vision', 'qwen-vl', 'gemma'].some(m => model.toLowerCase().includes(m));
 
-        const processedMessages = await Promise.all(messages.map(async msg => {
-            let contentArray = [];
-            
-            if (msg.content) {
-                contentArray.push({ type: 'text', text: msg.content });
+    const processedMessages = await Promise.all(messages.map(async msg => {
+        let contentArray = [];
+        
+        if (msg.content) {
+            contentArray.push({ type: 'text', text: msg.content });
+        }
+
+        if (supportsVision && msg.attachments && msg.attachments.length > 0) {
+            for (const attachment of msg.attachments) {
+                const ext = path.extname(attachment.path).toLowerCase();
+                try {
+                    let mimeType = 'image/jpeg';
+                    if (ext === '.png') mimeType = 'image/png';
+                    if (ext === '.webp') mimeType = 'image/webp';
+                    if (ext === '.pdf') mimeType = 'application/pdf';
+                    
+                    const fileData = fs.readFileSync(attachment.path);
+                    const base64File = fileData.toString('base64');
+                    const dataUrl = `data:${mimeType};base64,${base64File}`;
+                    
+                    contentArray.push({ type: 'image_url', image_url: { url: dataUrl } });
+                } catch (e) {
+                    console.error("Failed to load file:", e);
+                }
+            }
+        }
+
+        if (contentArray.length === 0) {
+            contentArray = msg.content || "";
+        } else if (contentArray.length === 1 && contentArray[0].type === 'text') {
+            contentArray = contentArray[0].text;
+        }
+
+        return { role: msg.role, content: contentArray };
+    }));
+
+    // Try each key in order — move to next on rate-limit or provider error
+    let lastError = null;
+    for (let i = 0; i < apiKeys.length; i++) {
+        const apiKey = apiKeys[i];
+        try {
+            console.log(`[AI] Trying key #${i + 1} of ${apiKeys.length}...`);
+
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: processedMessages,
+                    stream: true
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData?.error?.message || `HTTP ${response.status}`;
+                throw new Error(errMsg);
             }
 
-            if (supportsVision && msg.attachments && msg.attachments.length > 0) {
-                for (const attachment of msg.attachments) {
-                    const ext = path.extname(attachment.path).toLowerCase();
-                    try {
-                        let mimeType = 'image/jpeg';
-                        if (ext === '.png') mimeType = 'image/png';
-                        if (ext === '.webp') mimeType = 'image/webp';
-                        if (ext === '.pdf') mimeType = 'application/pdf';
-                        
-                        const fileData = fs.readFileSync(attachment.path);
-                        const base64File = fileData.toString('base64');
-                        const dataUrl = `data:${mimeType};base64,${base64File}`;
-                        
-                        contentArray.push({ type: 'image_url', image_url: { url: dataUrl } });
-                    } catch (e) {
-                        console.error("Failed to load file:", e);
+            // Read SSE stream
+            let responseText = "";
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // keep incomplete line
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed === 'data: [DONE]') continue;
+                    if (trimmed.startsWith('data: ')) {
+                        try {
+                            const json = JSON.parse(trimmed.slice(6));
+                            const content = json.choices?.[0]?.delta?.content;
+                            if (content) responseText += content;
+                        } catch (_) {}
                     }
                 }
             }
 
-            if (contentArray.length === 0) {
-                contentArray = msg.content || "";
-            } else if (contentArray.length === 1 && contentArray[0].type === 'text') {
-                contentArray = contentArray[0].text;
-            }
+            console.log(`[AI] Success with key #${i + 1}`);
+            return { text: responseText };
 
-            return { role: msg.role, content: contentArray };
-        }));
+        } catch (err) {
+            const msg_lower = err.message?.toLowerCase() || '';
+            const isRetryable = msg_lower.includes('rate limit') ||
+                                msg_lower.includes('429') ||
+                                msg_lower.includes('provider returned error') ||
+                                msg_lower.includes('503') ||
+                                msg_lower.includes('502') ||
+                                msg_lower.includes('no endpoints') ||
+                                msg_lower.includes('overloaded');
 
-        const openrouter = new OpenRouter({ apiKey: apiKey });
-        
-        const stream = await openrouter.chat.send({
-            chatRequest: {
-                model: model,
-                messages: processedMessages,
-                stream: true
-            }
-        });
+            console.error(`[AI] Key #${i + 1} failed: ${err.message}`);
+            lastError = err;
 
-        let responseText = "";
-        for await (const chunk of stream) {
-            const content = chunk.choices[0]?.delta?.content;
-            if (content) {
-                responseText += content;
-            }
-            // Usage information comes in the final chunk
-            if (chunk.usage) {
-                console.log("\nReasoning tokens:", chunk.usage.reasoningTokens);
+            if (!isRetryable) {
+                console.error('[AI] Non-retryable error, stopping.');
+                break;
             }
         }
-
-        return { text: responseText };
-
-    } catch (err) {
-        console.error(err);
-        return { error: err.message };
     }
+
+    console.error('[AI] All keys exhausted.');
+    return { error: lastError?.message || 'All API keys failed. Please try again later.' };
 });
 
 
@@ -1103,7 +1153,7 @@ ipcMain.handle('import-folder', async (event, folderPath) => {
                 PYTHONIOENCODING: 'utf-8',
                 PYTHONUTF8: '1',
                 OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
-                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-preview:free'
+                AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite'
             }
         });
 
