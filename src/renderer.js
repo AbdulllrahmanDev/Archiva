@@ -173,6 +173,16 @@ const i18n = {
         similarity_title: "Project Similarity Match",
         use_similar_btn: "Use Existing Folder",
         create_new_btn: "Create New",
+        update_title: "Software Update",
+        update_available_msg: "A new version of Archiva is being downloaded in the background.",
+        update_downloaded_msg: "The update is ready. Install now to enjoy the latest features?",
+        update_later: "Later",
+        update_now: "Update Now",
+        downloading: "Downloading Update...",
+        update_success: "Update installed successfully.",
+        latest_status: "Latest",
+        update_avail_status: "Update Available",
+        version_comparison: "v{current} → v{new}"
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -258,6 +268,16 @@ const i18n = {
         similarity_title: "تشابه في اسم المشروع",
         use_similar_btn: "استخدام المجلد الموجود",
         create_new_btn: "إنشاء مجلد جديد",
+        update_title: "تحديث البرنامج",
+        update_available_msg: "يوجد إصدار جديد، جاري التحميل في الخلفية...",
+        update_downloaded_msg: "التحديث جاهز. هل تود تثبيته الآن والاستمتاع بالمميزات الجديدة؟",
+        update_later: "لاحقاً",
+        update_now: "تحديث الآن",
+        downloading: "جاري التحميل...",
+        update_success: "تم التحديث بنجاح.",
+        latest_status: "أحدث إصدار",
+        update_avail_status: "تحديث متاح",
+        version_comparison: "v{current} ← v{new}"
     }
 };
 
@@ -2992,12 +3012,14 @@ updatePipelineUI();
 // AUTO-UPDATE UI LOGIC (Premium Modal)
 // ============================================================
 
-function showUpdateModal(title, message, onConfirm) {
+function showUpdateModal(title, message, onConfirm, showProgress = false) {
     const modal = document.getElementById('update-modal');
     const titleEl = document.getElementById('update-modal-title');
     const msgEl = document.getElementById('update-modal-message');
     const laterBtn = document.getElementById('update-later-btn');
     const nowBtn = document.getElementById('update-now-btn');
+    const actions = document.getElementById('update-modal-actions');
+    const progressContainer = document.getElementById('update-progress-container');
     const content = modal.querySelector('.modal-content');
 
     if (!modal) return;
@@ -3005,8 +3027,16 @@ function showUpdateModal(title, message, onConfirm) {
     titleEl.innerText = title;
     msgEl.innerText = message;
     
-    laterBtn.innerText = currentLang === 'ar' ? 'لاحقاً' : 'Later';
-    nowBtn.innerText = currentLang === 'ar' ? 'تحديث الآن' : 'Update Now';
+    laterBtn.innerText = t('update_later');
+    nowBtn.innerText = t('update_now');
+
+    if (showProgress) {
+        progressContainer.classList.remove('hidden');
+        actions.classList.add('hidden');
+    } else {
+        progressContainer.classList.add('hidden');
+        actions.classList.remove('hidden');
+    }
 
     modal.classList.remove('hidden');
     setTimeout(() => {
@@ -3022,53 +3052,100 @@ function showUpdateModal(title, message, onConfirm) {
 
     laterBtn.onclick = close;
     nowBtn.onclick = () => {
-        close();
-        onConfirm();
+        if (!showProgress) {
+            close();
+            onConfirm();
+        }
     };
 }
 
 if (window.api && window.api.onUpdateAvailable) {
-    window.api.onUpdateAvailable(() => {
-        showToast(currentLang === 'ar' ? 'يوجد تحديث جديد، جاري التحميل في الخلفية...' : 'New update found, downloading in background...');
+    window.api.onUpdateAvailable((info) => {
+        showUpdateModal(
+            t('update_title'), 
+            t('update_available_msg'), 
+            () => {}, 
+            true
+        );
     });
 
-    window.api.onUpdateDownloaded(() => {
-        const title = currentLang === 'ar' ? 'التحديث جاهز' : 'Update Ready';
-        const msg = currentLang === 'ar' 
-            ? 'تم تحميل الإصدار الجديد بنجاح. هل تود تثبيته الآن والاستمتاع بالمميزات الجديدة؟' 
-            : 'New version downloaded successfully. Would you like to install it now and enjoy the new features?';
+    if (window.api.onUpdateProgress) {
+        window.api.onUpdateProgress((progress) => {
+            const bar = document.getElementById('update-progress-bar');
+            const percent = document.getElementById('update-progress-percent');
+            const label = document.getElementById('update-progress-label');
+            const progressContainer = document.getElementById('update-progress-container');
             
-        showUpdateModal(title, msg, () => {
-            window.api.restartApp();
+            if (progressContainer) progressContainer.classList.remove('hidden');
+            if (bar) bar.style.width = `${progress.percent}%`;
+            if (percent) percent.innerText = `${Math.round(progress.percent)}%`;
+            if (label) label.innerText = t('downloading');
         });
+    }
+
+    window.api.onUpdateDownloaded(() => {
+        showUpdateModal(
+            t('update_title'), 
+            t('update_downloaded_msg'), 
+            () => window.api.restartApp(),
+            false
+        );
     });
+}
+
+async function syncUpdateStatus(silent = true) {
+    const btn = document.getElementById('manual-update-btn');
+    const versionText = document.getElementById('update-version-text');
+    const dot = document.getElementById('update-indicator-dot');
+    if (!btn || !versionText || !dot) return;
+
+    try {
+        const currentVersion = await window.api.getAppVersion();
+        const result = await window.api.checkForUpdatesManual();
+
+        if (result.success && result.updateInfo && result.updateInfo.version !== currentVersion) {
+            btn.classList.add('border-primary/40', 'text-primary/80');
+            btn.classList.remove('text-on-surface-variant/50');
+            dot.classList.remove('bg-outline-variant/40');
+            dot.classList.add('bg-primary', 'animate-pulse');
+            
+            const comparison = t('version_comparison', { current: currentVersion, new: result.updateInfo.version });
+            versionText.innerText = `Archiva ${comparison}`;
+            btn.disabled = false;
+        } else {
+            btn.classList.remove('border-primary/40', 'text-primary/80');
+            btn.classList.add('text-on-surface-variant/50');
+            dot.classList.add('bg-outline-variant/40');
+            dot.classList.remove('bg-primary', 'animate-pulse');
+            
+            versionText.innerText = `Archiva v${currentVersion} (${t('latest_status')})`;
+            btn.disabled = true;
+        }
+    } catch (e) {
+        if (!silent) showToast('status_fail');
+    }
 }
 
 async function handleManualUpdateCheck() {
     const btn = document.getElementById('manual-update-btn');
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
 
-    const originalHTML = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = `<span class="material-symbols-outlined text-[12px] animate-spin">sync</span> ${currentLang === 'ar' ? 'جاري الفحص...' : 'Checking...'}`;
-
-    try {
-        const result = await window.api.checkForUpdatesManual();
-        const currentVersion = await window.api.getAppVersion();
-
-        if (result.success) {
-            if (result.updateInfo && result.updateInfo.version !== currentVersion) {
-                showToast(currentLang === 'ar' ? 'يوجد إصدار جديد!' : 'New version found!');
-            } else {
-                showToast(currentLang === 'ar' ? 'أنت تستخدم أحدث إصدار بالفعل.' : 'You are already using the latest version.');
-            }
-        } else {
-            showToast(currentLang === 'ar' ? 'فشل التحقق من التحديثات.' : 'Failed to check for updates.');
-        }
-    } catch (e) {
-        showToast(currentLang === 'ar' ? 'حدث خطأ أثناء الاتصال بالخادم.' : 'Error connecting to server.');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
+    // If button is enabled, it means an update was found by syncUpdateStatus
+    // We can trigger the download or show the modal again if it was closed
+    const result = await window.api.checkForUpdatesManual();
+    if (result.success && result.updateInfo) {
+        showUpdateModal(
+            t('update_title'), 
+            t('update_available_msg'), 
+            () => {}, 
+            true
+        );
     }
 }
+
+// Initial check on load
+setTimeout(() => syncUpdateStatus(true), 2000);
+// Also re-check when settings opens
+document.getElementById('settings-open-btn')?.addEventListener('click', () => {
+    syncUpdateStatus(true);
+});

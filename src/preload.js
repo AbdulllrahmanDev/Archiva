@@ -61,8 +61,9 @@ contextBridge.exposeInMainWorld('api', {
     },
 
     // Auto-Update Events
-    onUpdateAvailable: (callback) => ipcRenderer.on('update_available', () => callback()),
-    onUpdateDownloaded: (callback) => ipcRenderer.on('update_downloaded', () => callback()),
+    onUpdateAvailable: (callback) => ipcRenderer.on('update_available', (event, info) => callback(info)),
+    onUpdateProgress: (callback) => ipcRenderer.on('update_progress', (event, progress) => callback(progress)),
+    onUpdateDownloaded: (callback) => ipcRenderer.on('update_downloaded', (event, info) => callback(info)),
     restartApp: () => ipcRenderer.send('restart_app'),
     checkForUpdatesManual: () => ipcRenderer.invoke('check-for-updates-manual'),
     getAppVersion: () => ipcRenderer.invoke('get-app-version')

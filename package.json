@@ -33,8 +33,8 @@
       "splashImage": "logo/splash.bmp"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "installerIcon": ".icon-ico/icon.ico",
       "uninstallerIcon": ".icon-ico/icon.ico",

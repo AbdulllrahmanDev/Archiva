@@ -1514,16 +1514,20 @@ function setupAutoUpdater() {
     // Immediate check on startup
     autoUpdater.checkForUpdatesAndNotify();
 
-    autoUpdater.on('update-available', () => {
-        if (mainWindow) mainWindow.webContents.send('update_available');
+    autoUpdater.on('update-available', (info) => {
+        if (mainWindow) mainWindow.webContents.send('update_available', info);
+    });
+
+    autoUpdater.on('download-progress', (progressObj) => {
+        if (mainWindow) mainWindow.webContents.send('update_progress', progressObj);
     });
 
     autoUpdater.on('update-not-available', () => {
         console.log('Update not available.');
     });
 
-    autoUpdater.on('update-downloaded', () => {
-        if (mainWindow) mainWindow.webContents.send('update_downloaded');
+    autoUpdater.on('update-downloaded', (info) => {
+        if (mainWindow) mainWindow.webContents.send('update_downloaded', info);
     });
 
     autoUpdater.on('error', (err) => {
