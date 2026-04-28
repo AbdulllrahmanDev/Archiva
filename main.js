@@ -617,7 +617,12 @@ ipcMain.handle('update-document', async (event, id, fields) => {
             let needsReorganize = false;
             if (fields.subject !== undefined && fields.subject !== doc.subject) needsReorganize = true;
             if (fields.project !== undefined && fields.project !== doc.project) needsReorganize = true;
-            if (fields.doc_date !== undefined && fields.doc_date !== doc.doc_date) needsReorganize = true;
+            if (fields.doc_date !== undefined && fields.doc_date !== doc.doc_date) {
+                // Only move the file if the YEAR changes, not just day/month
+                const oldYear = (doc.doc_date || '').split('-')[0];
+                const newYear = (fields.doc_date || '').split('-')[0];
+                if (oldYear !== newYear) needsReorganize = true;
+            }
             if (fields.governorate !== undefined && fields.governorate !== doc.governorate) needsReorganize = true;
             
             const updatedDoc = { ...doc, ...fields };

@@ -1808,24 +1808,19 @@ function selectDocument(id, isSoftUpdate = false) {
                         </p>
                     </div>
 
-                    <!-- التاريخ ورقم المرجع (Dynamic Expanding Layout) -->
-                    <div class="flex gap-2">
-                        <!-- التاريخ -->
-                        <div id="field-doc_date-${doc.id}" class="flex-1 min-w-0 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all duration-500 hover:flex-[2.5] group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'doc_date', '${doc.doc_date || ''}', '${currentLang === 'ar' ? 'التاريخ' : 'Date'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
-                            <div class="flex items-center justify-between gap-2 mb-1">
-                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'التاريخ' : 'Date'}</span>
-    
-                            </div>
-                            <p class="field-value text-xs font-bold text-on-surface font-mono truncate group-hover/field:whitespace-normal">${doc.doc_date || '—'}</p>
+                    <!-- التاريخ -->
+                    <div id="field-doc_date-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'doc_date', '${doc.doc_date || ''}', '${currentLang === 'ar' ? 'التاريخ' : 'Date'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'التاريخ' : 'Date'}</span>
                         </div>
-                        <!-- الرقم -->
-                        <div id="field-version_no-${doc.id}" class="flex-1 min-w-0 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all duration-500 hover:flex-[2.5] group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'version_no', '${doc.version_no || ''}', '${currentLang === 'ar' ? 'الرقم' : 'Reference'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
-                            <div class="flex items-center justify-between gap-2 mb-1">
-                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'الرقم' : 'Reference'}</span>
-    
-                            </div>
-                            <p class="field-value text-xs font-bold text-primary truncate group-hover/field:whitespace-normal">${doc.version_no || '—'}</p>
+                        <p class="field-value text-xs font-bold text-on-surface font-mono truncate group-hover/field:whitespace-normal">${doc.doc_date || '—'}</p>
+                    </div>
+                    <!-- الرقم -->
+                    <div id="field-version_no-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'version_no', '${doc.version_no || ''}', '${currentLang === 'ar' ? 'الرقم' : 'Reference'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'الرقم' : 'Reference'}</span>
                         </div>
+                        <p class="field-value text-xs font-bold text-primary truncate group-hover/field:whitespace-normal">${doc.version_no || '—'}</p>
                     </div>
 
                     <!-- مسار الملف (File Path) -->
@@ -2069,7 +2064,7 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
 
         const createSelect = (placeholder, current, options) => {
             const sel = document.createElement('select');
-            sel.className = 'flex-1 bg-surface-container-highest text-[11px] font-bold text-on-surface outline-none border border-primary/20 rounded-xl px-2 py-2 transition-all focus:border-primary/60 cursor-pointer appearance-none text-center hover:bg-surface-container-high';
+            sel.className = 'flex-1 bg-surface-container-highest text-[10px] font-bold text-on-surface outline-none border border-primary/20 rounded-lg px-1.5 py-1.5 transition-all focus:border-primary/60 cursor-pointer appearance-none text-center hover:bg-surface-container-high';
             
             const pOpt = document.createElement('option');
             pOpt.value = '';
@@ -2140,7 +2135,8 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
     }
     inputEl.focus();
     if (!isGovernorate) {
-        inputEl.select();
+        // Only call .select() on real input elements (not custom date picker)
+        if (typeof inputEl.select === 'function') inputEl.select();
         // Add click-outside listener for regular fields
         setTimeout(() => {
             const handleGlobalClickRegular = (e) => {
@@ -2159,25 +2155,22 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         cardEl.classList.remove('hover:border-primary/20');
     }
 
-    // Create action buttons (Modern design)
+    // Create action buttons
     const actions = document.createElement('div');
     actions.id = `actions-${fieldKey}`;
-    actions.className = 'flex gap-2 mt-4 justify-end items-center w-full relative z-[100]';
+    actions.className = 'flex gap-3 mt-3 justify-end items-center w-full';
     actions.innerHTML = `
-        <button id="cancel-edit-${fieldKey}" class="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:text-error hover:bg-error/5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+        <button id="cancel-edit-${fieldKey}" class="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest text-on-surface-variant bg-surface-container-highest rounded-xl hover:text-error transition-all flex items-center gap-1.5 cursor-pointer border border-outline-variant/20">
             ${getIcon('close', 'xs')} ${currentLang === 'ar' ? 'إلغاء' : 'Cancel'}
         </button>
-        <button id="save-edit-${fieldKey}" class="px-5 py-2 text-[9px] font-black uppercase tracking-widest text-white bg-primary rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md shadow-primary/20 flex items-center gap-1.5 cursor-pointer">
+        <button id="save-edit-${fieldKey}" class="px-5 py-1.5 text-[9px] font-black uppercase tracking-widest text-white bg-primary rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md shadow-primary/20 flex items-center gap-1.5 cursor-pointer">
             ${getIcon('check', 'xs')} ${currentLang === 'ar' ? 'حفظ' : 'Save'}
         </button>
     `;
 
-    // Ensure the card can show the buttons and has correct layout
+    // Append buttons directly to card
     cardEl.style.setProperty('display', 'flex', 'important');
     cardEl.style.setProperty('flex-direction', 'column', 'important');
-    cardEl.style.setProperty('height', 'auto', 'important');
-    cardEl.style.setProperty('min-height', '140px', 'important');
-    
     cardEl.appendChild(actions);
 
     const cancelFn = () => {
@@ -2193,8 +2186,6 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         cardEl.classList.remove('is-editing');
         cardEl.style.display = '';
         cardEl.style.flexDirection = '';
-        cardEl.style.height = '';
-        cardEl.style.minHeight = '';
         if (fieldKey !== 'title') {
             cardEl.classList.remove('bg-surface-container-highest/30');
             cardEl.classList.add('hover:border-primary/20');
@@ -2238,8 +2229,6 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 cardEl.classList.remove('is-editing');
                 cardEl.style.display = '';
                 cardEl.style.flexDirection = '';
-                cardEl.style.height = '';
-                cardEl.style.minHeight = '';
                 if (fieldKey !== 'title') {
                     cardEl.classList.remove('bg-surface-container-highest/30');
                     cardEl.classList.add('hover:border-primary/20');
