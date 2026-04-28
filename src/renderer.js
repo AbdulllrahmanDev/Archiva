@@ -1808,19 +1808,22 @@ function selectDocument(id, isSoftUpdate = false) {
                         </p>
                     </div>
 
-                    <!-- التاريخ -->
-                    <div id="field-doc_date-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'doc_date', '${doc.doc_date || ''}', '${currentLang === 'ar' ? 'التاريخ' : 'Date'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
-                        <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'التاريخ' : 'Date'}</span>
+                    <!-- التاريخ ورقم المرجع - جنب بعض مع توسع عند الإشارة -->
+                    <div class="flex gap-2 date-ref-row">
+                        <!-- التاريخ -->
+                        <div id="field-doc_date-${doc.id}" class="flex-1 min-w-0 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 hover:flex-[3] group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'doc_date', '${doc.doc_date || ''}', '${currentLang === 'ar' ? 'التاريخ' : 'Date'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'التاريخ' : 'Date'}</span>
+                            </div>
+                            <p class="field-value text-xs font-bold text-on-surface font-mono truncate">${doc.doc_date || '—'}</p>
                         </div>
-                        <p class="field-value text-xs font-bold text-on-surface font-mono truncate group-hover/field:whitespace-normal">${doc.doc_date || '—'}</p>
-                    </div>
-                    <!-- الرقم -->
-                    <div id="field-version_no-${doc.id}" class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'version_no', '${doc.version_no || ''}', '${currentLang === 'ar' ? 'الرقم' : 'Reference'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
-                        <div class="flex items-center justify-between gap-2 mb-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'الرقم' : 'Reference'}</span>
+                        <!-- الرقم -->
+                        <div id="field-version_no-${doc.id}" class="flex-1 min-w-0 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/5 hover:border-primary/20 transition-all duration-300 hover:flex-[3] group/field cursor-context-menu" oncontextmenu="event.preventDefault(); openFieldEditor(this, '${doc.id}', 'version_no', '${doc.version_no || ''}', '${currentLang === 'ar' ? 'الرقم' : 'Reference'}')" title="${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 group-hover/field:text-primary transition-colors">${currentLang === 'ar' ? 'الرقم' : 'Reference'}</span>
+                            </div>
+                            <p class="field-value text-xs font-bold text-primary truncate">${doc.version_no || '—'}</p>
                         </div>
-                        <p class="field-value text-xs font-bold text-primary truncate group-hover/field:whitespace-normal">${doc.version_no || '—'}</p>
                     </div>
 
                     <!-- مسار الملف (File Path) -->
@@ -2168,10 +2171,27 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         </button>
     `;
 
-    // Append buttons directly to card
-    cardEl.style.setProperty('display', 'flex', 'important');
-    cardEl.style.setProperty('flex-direction', 'column', 'important');
-    cardEl.appendChild(actions);
+    // Detect if this card is inside the date-ref flex row
+    const flexRowParent = cardEl.parentElement;
+    const isInDateRefRow = flexRowParent && flexRowParent.classList.contains('date-ref-row');
+    let siblingCard = null;
+
+    if (isInDateRefRow) {
+        // Hide the sibling (other field) and expand this one to full width
+        siblingCard = Array.from(flexRowParent.children).find(c => c !== cardEl);
+        if (siblingCard) {
+            siblingCard.style.transition = 'all 0.25s ease';
+            siblingCard.style.setProperty('display', 'none', 'important');
+        }
+        cardEl.style.setProperty('flex', '1 1 100%', 'important');
+        // Insert buttons AFTER the flex row so they're never clipped
+        flexRowParent.insertAdjacentElement('afterend', actions);
+    } else {
+        // All other fields: append buttons directly inside the card
+        cardEl.style.setProperty('display', 'flex', 'important');
+        cardEl.style.setProperty('flex-direction', 'column', 'important');
+        cardEl.appendChild(actions);
+    }
 
     const cancelFn = () => {
         // Restore original value display
@@ -2186,6 +2206,9 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         cardEl.classList.remove('is-editing');
         cardEl.style.display = '';
         cardEl.style.flexDirection = '';
+        cardEl.style.flex = ''; // Reset expansion
+        if (siblingCard) siblingCard.style.display = ''; // Restore sibling
+        
         if (fieldKey !== 'title') {
             cardEl.classList.remove('bg-surface-container-highest/30');
             cardEl.classList.add('hover:border-primary/20');
@@ -2229,6 +2252,9 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 cardEl.classList.remove('is-editing');
                 cardEl.style.display = '';
                 cardEl.style.flexDirection = '';
+                cardEl.style.flex = ''; // Reset expansion
+                if (siblingCard) siblingCard.style.display = ''; // Restore sibling
+
                 if (fieldKey !== 'title') {
                     cardEl.classList.remove('bg-surface-container-highest/30');
                     cardEl.classList.add('hover:border-primary/20');
