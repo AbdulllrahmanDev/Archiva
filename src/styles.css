@@ -189,6 +189,15 @@ body {
     transform: translateY(-20px) scale(0.7);
 }
 
+.upload-btn-container.drag-over {
+    transform: scale(1.05);
+}
+
+.upload-btn-container.drag-over #main-upload-btn {
+    box-shadow: 0 0 50px rgba(0, 122, 204, 0.3);
+    filter: brightness(1.1);
+}
+
 .staging-area {
     opacity: 0;
     max-height: 0;

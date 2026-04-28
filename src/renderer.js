@@ -364,7 +364,21 @@ function t(key, data = {}) {
 
 const getViews = () => ({
     add: `
-        <div class="flex flex-col items-center justify-center min-h-[80vh] px-6 animate-fade-in text-white/0">
+        <div id="add-view-container" class="relative flex flex-col items-center justify-center min-h-[80vh] px-6 animate-fade-in text-white/0 overflow-hidden">
+            <!-- Full Page Drag Overlay (Blurred Backdrop) -->
+            <div id="drag-overlay" class="absolute inset-0 z-[100] bg-background/80 backdrop-blur-2xl opacity-0 pointer-events-none transition-all duration-300">
+                <!-- Adjusted to pt-64 to follow the button's shift -->
+                <div class="flex flex-col items-center min-h-full pt-64">
+                    <div class="w-32 h-32 md:w-40 md:h-40 bg-primary text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce">
+                        ${getIcon('cloud_upload', 'xl')}
+                    </div>
+                    <!-- Slightly reduced margin as requested -->
+                    <div class="mt-24 text-center">
+                        <p class="text-lg font-black text-primary uppercase tracking-[0.2em] animate-pulse">${currentLang === 'ar' ? 'أفلت الملفات الآن' : 'Drop Files Now'}</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="relative z-10 w-full max-w-5xl flex flex-col items-center">
                 <div id="hero-header" class="text-center space-y-4 mb-12 transition-all duration-700">
                     <h1 class="font-headline text-5xl md:text-6xl font-extrabold tracking-tighter text-on-surface">${t('hero_title')}</h1>
@@ -971,7 +985,56 @@ function switchView(viewName) {
         setupChatUI();
 
         const upBtn = document.getElementById('main-upload-btn');
-        if (upBtn) upBtn.onclick = handleFileSelection;
+        if (upBtn) {
+            upBtn.onclick = handleFileSelection;
+            
+            // --- PREMIUM FULL-PAGE SMART DROP ---
+            const addContainer = document.getElementById('add-view-container');
+            const dragOverlay = document.getElementById('drag-overlay');
+            
+            if (addContainer && dragOverlay) {
+                let dragCounter = 0;
+
+                addContainer.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    dragCounter++;
+                    dragOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                    dragOverlay.classList.add('opacity-100');
+                });
+
+                addContainer.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                addContainer.addEventListener('dragleave', (e) => {
+                    dragCounter--;
+                    if (dragCounter === 0) {
+                        dragOverlay.classList.remove('opacity-100');
+                        dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    }
+                });
+
+                addContainer.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    dragCounter = 0;
+                    dragOverlay.classList.remove('opacity-100');
+                    dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    
+                    const dt = e.dataTransfer;
+                    if (dt.files && dt.files.length > 0) {
+                        const files = Array.from(dt.files).map(f => ({
+                            name: f.name,
+                            path: f.path,
+                            size: f.size
+                        }));
+                        
+                        const newFiles = files.filter(f => !pendingFiles.some(pf => pf.path === f.path));
+                        pendingFiles = [...pendingFiles, ...newFiles];
+                        enterStagingState();
+                    }
+                });
+            }
+        }
 
         const gridBtn = document.getElementById('toggle-grid-view');
         const listBtn = document.getElementById('toggle-list-view');
@@ -2926,24 +2989,57 @@ if (window.api.onProjectSimilarityAsk) {
 updateLayoutDirection();
 updatePipelineUI();
 // ============================================================
-// AUTO-UPDATE UI LOGIC
+// AUTO-UPDATE UI LOGIC (Premium Modal)
 // ============================================================
+
+function showUpdateModal(title, message, onConfirm) {
+    const modal = document.getElementById('update-modal');
+    const titleEl = document.getElementById('update-modal-title');
+    const msgEl = document.getElementById('update-modal-message');
+    const laterBtn = document.getElementById('update-later-btn');
+    const nowBtn = document.getElementById('update-now-btn');
+    const content = modal.querySelector('.modal-content');
+
+    if (!modal) return;
+
+    titleEl.innerText = title;
+    msgEl.innerText = message;
+    
+    laterBtn.innerText = currentLang === 'ar' ? 'لاحقاً' : 'Later';
+    nowBtn.innerText = currentLang === 'ar' ? 'تحديث الآن' : 'Update Now';
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.classList.remove('opacity-0');
+        content.classList.remove('scale-90');
+    }, 10);
+
+    const close = () => {
+        modal.classList.add('opacity-0');
+        content.classList.add('scale-90');
+        setTimeout(() => modal.classList.add('hidden'), 500);
+    };
+
+    laterBtn.onclick = close;
+    nowBtn.onclick = () => {
+        close();
+        onConfirm();
+    };
+}
 
 if (window.api && window.api.onUpdateAvailable) {
     window.api.onUpdateAvailable(() => {
-        showToast(currentLang === 'ar' ? 'يوجد تحديث جديد، جاري التحميل...' : 'New update available, downloading...');
+        showToast(currentLang === 'ar' ? 'يوجد تحديث جديد، جاري التحميل في الخلفية...' : 'New update found, downloading in background...');
     });
 
     window.api.onUpdateDownloaded(() => {
-        const title = currentLang === 'ar' ? 'تحديث جديد' : 'Update Ready';
+        const title = currentLang === 'ar' ? 'التحديث جاهز' : 'Update Ready';
         const msg = currentLang === 'ar' 
-            ? 'تم تحميل التحديث بنجاح. هل تريد إغلاق البرنامج وتثبيته الآن؟' 
-            : 'Update downloaded. Restart and install now?';
+            ? 'تم تحميل الإصدار الجديد بنجاح. هل تود تثبيته الآن والاستمتاع بالمميزات الجديدة؟' 
+            : 'New version downloaded successfully. Would you like to install it now and enjoy the new features?';
             
-        confirmAction('update_label', '', 'info', msg).then(confirmed => {
-            if (confirmed) {
-                window.api.restartApp();
-            }
+        showUpdateModal(title, msg, () => {
+            window.api.restartApp();
         });
     });
 }
@@ -2952,14 +3048,18 @@ async function handleManualUpdateCheck() {
     const btn = document.getElementById('manual-update-btn');
     if (!btn) return;
 
+    const originalHTML = btn.innerHTML;
     btn.disabled = true;
-    const originalText = btn.innerText;
-    btn.innerText = currentLang === 'ar' ? 'جاري التحقق...' : 'Checking...';
+    btn.innerHTML = `<span class="material-symbols-outlined text-[12px] animate-spin">sync</span> ${currentLang === 'ar' ? 'جاري الفحص...' : 'Checking...'}`;
 
     try {
         const result = await window.api.checkForUpdatesManual();
         if (result.success) {
-            showToast(currentLang === 'ar' ? 'تم التحقق من التحديثات.' : 'Update check complete.');
+            if (result.updateInfo && result.updateInfo.version !== '2.1.1') {
+                showToast(currentLang === 'ar' ? 'يوجد إصدار جديد!' : 'New version found!');
+            } else {
+                showToast(currentLang === 'ar' ? 'أنت تستخدم أحدث إصدار بالفعل.' : 'You are already using the latest version.');
+            }
         } else {
             showToast(currentLang === 'ar' ? 'فشل التحقق من التحديثات.' : 'Failed to check for updates.');
         }
@@ -2967,6 +3067,6 @@ async function handleManualUpdateCheck() {
         showToast(currentLang === 'ar' ? 'حدث خطأ أثناء الاتصال بالخادم.' : 'Error connecting to server.');
     } finally {
         btn.disabled = false;
-        btn.innerText = originalText;
+        btn.innerHTML = originalHTML;
     }
 }
