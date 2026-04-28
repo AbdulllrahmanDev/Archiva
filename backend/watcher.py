@@ -392,6 +392,9 @@ if __name__ == '__main__':
                 file_to_process = os.path.abspath(sys.argv[2])
                 watch_folder = os.path.abspath(sys.argv[3])
                 
+                # Check for --skip-ai flag
+                skip_ai_flag = "--skip-ai" in sys.argv
+                
                 # Optional --id
                 passed_id = None
                 if "--id" in sys.argv:
@@ -404,8 +407,8 @@ if __name__ == '__main__':
                 # Setup DB and process
                 set_db_path(watch_folder)
                 try:
-                    # Force AI explicitly since this is a manual manual invocation
-                    process_file(file_to_process, watch_folder, skip_ai=False, force_reprocess=True, doc_id=passed_id)
+                    # Use skip_ai_flag if provided
+                    process_file(file_to_process, watch_folder, skip_ai=skip_ai_flag, force_reprocess=True, doc_id=passed_id)
                 except Exception as e:
                     print(f"Manual Processing error: {e}", flush=True)
             else:

@@ -466,6 +466,11 @@ ipcMain.handle('process-uploads', async (event, files, forceAi) => {
                     args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', destPath, watchFolder, '--id', fileId];
                 }
 
+                // Respect the auto-analysis toggle
+                if (!autoAnalysisEnabled) {
+                    args.push('--skip-ai');
+                }
+
                 const pyProcess = spawn(executable, args, {
                     env: {
                         ...process.env,
@@ -970,6 +975,11 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                         ? path.join(__dirname, 'venv', 'Scripts', 'python.exe')
                         : path.join(__dirname, 'venv', 'bin', 'python');
                     args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', filePath, watchFolder, '--id', id];
+                }
+
+                // Even for manual reprocess, if the global toggle is OFF, we skip AI unless we implement a 'force' flag
+                if (!autoAnalysisEnabled) {
+                    args.push('--skip-ai');
                 }
                 
                 const pyProcess = spawn(executable, args, {
