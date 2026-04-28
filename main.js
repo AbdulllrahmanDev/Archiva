@@ -1469,6 +1469,7 @@ ipcMain.handle('toggle-smart-project', async (event, enabled) => {
 function writeSentinelFiles(enabled, activatedAt, splitEnabled, smartMatchEnabled) {
     if (!watchFolder || !fs.existsSync(watchFolder)) return;
 
+    const sentinelDir = path.join(watchFolder, '.archiva');
     const enabledFile  = path.join(sentinelDir, 'auto_analysis_enabled');
     const tsFile       = path.join(sentinelDir, 'activation_timestamp');
     const splitFile    = path.join(sentinelDir, 'pdf_split_enabled');

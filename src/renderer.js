@@ -1975,6 +1975,8 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
     // Prevent double-opening
     if (cardEl.querySelector('input, textarea, select')) return;
 
+    cardEl.classList.add('is-editing');
+
     const valueEl = cardEl.querySelector('.field-value');
     if (!valueEl) return;
 
@@ -2042,6 +2044,84 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
             inputEl._globalClickHandler = handleGlobalClick;
             document.addEventListener('click', handleGlobalClick);
         }, 10);
+    } else if (fieldKey === 'doc_date') {
+        const dateContainer = document.createElement('div');
+        dateContainer.className = 'flex gap-2 mt-2';
+        
+        // Parse current value (Handles YYYY-MM-DD and DD-MM-YYYY)
+        let y = '', m = '', d = '';
+        if (currentValue && currentValue.includes('-')) {
+            const parts = currentValue.split('-');
+            if (parts[0].length === 4) {
+                // YYYY-MM-DD
+                y = parts[0];
+                m = parts[1];
+                d = parts[2];
+            } else if (parts[2]?.length === 4) {
+                // DD-MM-YYYY
+                d = parts[0];
+                m = parts[1];
+                y = parts[2];
+            } else {
+                y = parts[0]; m = parts[1]; d = parts[2];
+            }
+        }
+
+        const createSelect = (placeholder, current, options) => {
+            const sel = document.createElement('select');
+            sel.className = 'flex-1 bg-surface-container-highest text-[11px] font-bold text-on-surface outline-none border border-primary/20 rounded-xl px-2 py-2 transition-all focus:border-primary/60 cursor-pointer appearance-none text-center hover:bg-surface-container-high';
+            
+            const pOpt = document.createElement('option');
+            pOpt.value = '';
+            pOpt.textContent = placeholder;
+            pOpt.disabled = true;
+            pOpt.selected = !current;
+            sel.appendChild(pOpt);
+
+            options.forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                o.selected = (opt == current);
+                sel.appendChild(o);
+            });
+            return sel;
+        };
+
+        const years = [];
+        const currentYear = new Date().getFullYear();
+        for (let i = currentYear + 5; i >= 1950; i--) years.push(i.toString());
+
+        const months = [];
+        for (let i = 1; i <= 12; i++) months.push(i.toString().padStart(2, '0'));
+
+        const days = [];
+        for (let i = 1; i <= 31; i++) days.push(i.toString().padStart(2, '0'));
+
+        const selY = createSelect(currentLang === 'ar' ? 'السنة' : 'Year', y, years);
+        const selM = createSelect(currentLang === 'ar' ? 'الشهر' : 'Month', m, months);
+        const selD = createSelect(currentLang === 'ar' ? 'اليوم' : 'Day', d, days);
+
+        // Order: Year -> Month -> Day (Standard)
+        // In RTL mode, Flexbox handles visual order if we just append
+        dateContainer.appendChild(selY);
+        dateContainer.appendChild(selM);
+        dateContainer.appendChild(selD);
+
+        inputEl = {
+            _isCustom: true,
+            container: dateContainer,
+            get value() {
+                if (!selY.value || !selM.value || !selD.value) return '';
+                return `${selY.value}-${selM.value}-${selD.value}`;
+            },
+            focus: () => selY.focus(),
+            addEventListener: (ev, fn) => {
+                selY.addEventListener(ev, fn);
+                selM.addEventListener(ev, fn);
+                selD.addEventListener(ev, fn);
+            }
+        };
     } else {
         inputEl = document.createElement(isMultiline ? 'textarea' : 'input');
         inputEl.value = (currentValue === '—' || !currentValue) ? '' : currentValue;
@@ -2053,6 +2133,8 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
     // Replace value text with input
     if (isGovernorate) {
         valueEl.replaceWith(inputEl.dropdownContainer);
+    } else if (inputEl._isCustom) {
+        valueEl.replaceWith(inputEl.container);
     } else {
         valueEl.replaceWith(inputEl);
     }
@@ -2079,15 +2161,23 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
 
     // Create action buttons (Modern design)
     const actions = document.createElement('div');
-    actions.className = 'flex gap-2 mt-4 justify-end items-center';
+    actions.id = `actions-${fieldKey}`;
+    actions.className = 'flex gap-2 mt-4 justify-end items-center w-full relative z-[100]';
     actions.innerHTML = `
-        <button id="cancel-edit-${fieldKey}" class="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:text-error hover:bg-error/5 rounded-xl transition-all">
-            ${currentLang === 'ar' ? 'إلغاء' : 'Cancel'}
+        <button id="cancel-edit-${fieldKey}" class="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60 hover:text-error hover:bg-error/5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+            ${getIcon('close', 'xs')} ${currentLang === 'ar' ? 'إلغاء' : 'Cancel'}
         </button>
-        <button id="save-edit-${fieldKey}" class="px-5 py-2 text-[10px] font-black uppercase tracking-widest text-white bg-primary rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md shadow-primary/20">
-            ${currentLang === 'ar' ? 'حفظ التعديل' : 'Save Changes'}
+        <button id="save-edit-${fieldKey}" class="px-5 py-2 text-[9px] font-black uppercase tracking-widest text-white bg-primary rounded-xl hover:brightness-110 active:scale-95 transition-all shadow-md shadow-primary/20 flex items-center gap-1.5 cursor-pointer">
+            ${getIcon('check', 'xs')} ${currentLang === 'ar' ? 'حفظ' : 'Save'}
         </button>
     `;
+
+    // Ensure the card can show the buttons and has correct layout
+    cardEl.style.setProperty('display', 'flex', 'important');
+    cardEl.style.setProperty('flex-direction', 'column', 'important');
+    cardEl.style.setProperty('height', 'auto', 'important');
+    cardEl.style.setProperty('min-height', '140px', 'important');
+    
     cardEl.appendChild(actions);
 
     const cancelFn = () => {
@@ -2098,8 +2188,13 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
         
         p.textContent = currentValue || '—';
-        (inputEl.dropdownContainer || inputEl).replaceWith(p);
+        (inputEl.dropdownContainer || inputEl.container || inputEl).replaceWith(p);
         actions.remove();
+        cardEl.classList.remove('is-editing');
+        cardEl.style.display = '';
+        cardEl.style.flexDirection = '';
+        cardEl.style.height = '';
+        cardEl.style.minHeight = '';
         if (fieldKey !== 'title') {
             cardEl.classList.remove('bg-surface-container-highest/30');
             cardEl.classList.add('hover:border-primary/20');
@@ -2138,8 +2233,13 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
                 
                 p.textContent = newValue || '—';
-                (inputEl.dropdownContainer || inputEl).replaceWith(p);
+                (inputEl.dropdownContainer || inputEl.container || inputEl).replaceWith(p);
                 actions.remove();
+                cardEl.classList.remove('is-editing');
+                cardEl.style.display = '';
+                cardEl.style.flexDirection = '';
+                cardEl.style.height = '';
+                cardEl.style.minHeight = '';
                 if (fieldKey !== 'title') {
                     cardEl.classList.remove('bg-surface-container-highest/30');
                     cardEl.classList.add('hover:border-primary/20');
@@ -2148,6 +2248,11 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 showToast('storage_updated');
                 if (inputEl._globalClickHandler) {
                     document.removeEventListener('click', inputEl._globalClickHandler);
+                }
+
+                // IMPORTANT: If path changed (e.g. date change), refresh the whole sidebar to update button handlers
+                if (result.newPath) {
+                    selectDocument(docId, true);
                 }
 
                 // 3. إعادة تحديث العرض الرئيسي لضمان ترتيب البيانات أو البحث
