@@ -3054,8 +3054,10 @@ async function handleManualUpdateCheck() {
 
     try {
         const result = await window.api.checkForUpdatesManual();
+        const currentVersion = await window.api.getAppVersion();
+
         if (result.success) {
-            if (result.updateInfo && result.updateInfo.version !== '2.1.1') {
+            if (result.updateInfo && result.updateInfo.version !== currentVersion) {
                 showToast(currentLang === 'ar' ? 'يوجد إصدار جديد!' : 'New version found!');
             } else {
                 showToast(currentLang === 'ar' ? 'أنت تستخدم أحدث إصدار بالفعل.' : 'You are already using the latest version.');

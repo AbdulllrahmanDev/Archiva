@@ -1544,6 +1544,8 @@ ipcMain.handle('check-for-updates-manual', async () => {
     }
 });
 
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 // Initialize on app start
 app.whenReady().then(() => {
     setupAutoUpdater();
