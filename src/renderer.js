@@ -1,4 +1,5 @@
 // Archiva | Digital Curator - Renderer Engine
+console.log("Archiva Renderer Engine Loaded - Update UI Active");
 const viewport = document.getElementById('app-viewport');
 const insightRail = document.getElementById('insight-rail');
 const railContent = document.getElementById('rail-content');
