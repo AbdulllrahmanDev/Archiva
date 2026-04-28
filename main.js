@@ -329,6 +329,7 @@ app.whenReady().then(() => {
     writeSentinelFiles(autoAnalysisEnabled, autoAnalysisActivatedAt, pdfSplitEnabled, smartProjectMatchingEnabled);
     createWindow();
     startBackend();
+    setupAutoUpdater();
 
 
     ipcMain.on('web-ready', () => {

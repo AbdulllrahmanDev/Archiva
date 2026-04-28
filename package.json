@@ -1,6 +1,6 @@
 {
   "name": "archiva",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "",
   "main": "main.js",
   "scripts": {
@@ -23,7 +23,10 @@
       }
     ],
     "win": {
-      "target": "portable",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": ".icon-ico/icon.ico"
     },
     "portable": {
