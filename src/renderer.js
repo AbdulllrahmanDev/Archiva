@@ -488,13 +488,6 @@ const getViews = () => ({
                         <button id="toggle-filter-menu" class="relative p-2 rounded-xl bg-surface-container-low hover:bg-primary/20 transition-all">${getIcon('tune')}<div id="filter-indicator" class="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full hidden"></div></button>
                     </div>
                     
-                    <div id="filter-menu" class="filter-menu-flyout">
-                        <!-- Dynamic filter sections are rendered by buildDynamicFilterMenu() -->
-                        <div id="filter-dynamic-sections" class="space-y-4"></div>
-                        <div class="pt-4 mt-4 border-t border-outline-variant/10 flex items-center justify-between w-full flex-shrink-0">
-                            <button id="reset-filters" class="text-[10px] font-black uppercase text-error/60 transition-colors flex items-center gap-2">${getIcon('restart_alt', 'sm')}${t('reset_all')}</button>
-                            <button id="apply-filters-btn" class="px-5 py-2 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-md transition-all">${t('done')}</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -548,6 +541,24 @@ const getViews = () => ({
                 </div>
                 <div class="col-span-12 lg:col-span-8 2xl:col-span-9">
                     <div id="archive-render-target" class="w-full h-full min-h-[400px]"></div>
+                </div>
+            </div>
+
+            <!-- Filter Modal (Moved outside transformed container) -->
+            <div id="filter-menu" class="filter-menu-flyout">
+                <div class="flex items-center justify-between mb-8 flex-row-reverse">
+                     <h2 class="text-2xl font-black text-on-surface tracking-tight">${currentLang === 'ar' ? 'فلاتر البحث المتقدمة' : 'Advanced Search Filters'}</h2>
+                     <button onclick="document.getElementById('filter-menu').classList.remove('active')" class="w-10 h-10 flex items-center justify-center hover:bg-error/10 hover:text-error rounded-xl transition-all">
+                         ${getIcon('close')}
+                     </button>
+                </div>
+                
+                <!-- Dynamic filter sections are rendered by buildDynamicFilterMenu() -->
+                <div id="filter-dynamic-sections" class="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar" style="direction: ${currentLang === 'ar' ? 'rtl' : 'ltr'};"></div>
+                
+                <div class="pt-6 mt-2 border-t border-outline-variant/10 flex items-center justify-between w-full flex-shrink-0">
+                    <button id="reset-filters" class="px-6 py-3 text-[12px] font-black uppercase text-error/60 hover:text-error hover:bg-error/5 rounded-xl transition-all flex items-center gap-2">${getIcon('restart_alt', 'sm')}${t('reset_all')}</button>
+                    <button id="apply-filters-btn" class="px-10 py-4 bg-primary text-white text-[12px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">${t('done')}</button>
                 </div>
             </div>
         </div>
@@ -1400,8 +1411,18 @@ function buildDynamicFilterMenu() {
 
     documents.forEach(doc => {
         if (doc.doc_date) {
-            const y = String(doc.doc_date).split('-')[0];
-            if (y && y.length >= 4) years.add(y);
+            let y = String(doc.doc_date);
+            const parts = y.split('-');
+            if (parts.length === 3) {
+                // Handle both YYYY-MM-DD and DD-MM-YYYY
+                if (parts[0].length === 4) y = parts[0];
+                else if (parts[2].length === 4) y = parts[2];
+            } else if (y.length >= 4) {
+                // Fallback for other formats
+                const match = y.match(/\d{4}/);
+                if (match) y = match[0];
+            }
+            if (y && y.length === 4 && !isNaN(y)) years.add(y);
         }
         if (doc.project && !['\u063a\u064a\u0631 \u0645\u062d\u062f\u062f', '\u063a\u064a\u0631_\u0645\u062d\u062f\u062f', 'general', '\u0639\u0627\u0645', ''].includes((doc.project || '').toLowerCase().trim())) {
             projects.add(doc.project);
@@ -1415,17 +1436,20 @@ function buildDynamicFilterMenu() {
     // Build a horizontal-scroll chip row section
     const makeSection = (titleLabel, cat, values, labelFn = v => v) => {
         if (values.length === 0) return '';
+        // Sort values: years should be reverse chronological, others alphabetical
+        const sortedValues = (cat === 'year') ? [...values].sort().reverse() : [...values].sort((a,b) => a.localeCompare(b, currentLang === 'ar' ? 'ar' : 'en'));
+        
         return `
             <div class="filter-section-group" data-cat="${cat}">
-                <div class="flex items-center justify-between mb-3 border-b border-outline-variant/10 pb-2 flex-row-reverse">
-                    <span class="text-[8px] font-black text-primary/30 uppercase tracking-tighter">${values.length} ${currentLang === 'ar' ? 'عناصر' : 'Items'}</span>
+                <div class="flex items-center justify-between mb-4 border-b border-outline-variant/10 pb-3 flex-row-reverse">
+                    <span class="text-[10px] font-black text-primary/40 uppercase tracking-widest">${values.length} ${currentLang === 'ar' ? 'عناصر' : 'Items'}</span>
                     <h4 class="filter-section-title !mb-0 transition-colors">${titleLabel}</h4>
                 </div>
-                <div class="filter-chips-row">
-                    ${values.map(v => {
-            const isActive = (activeFilters[cat] || []).includes(v);
-            return `<div class="filter-option ${isActive ? 'selected' : ''}" data-cat="${cat}" data-val="${v}">${labelFn(v)}</div>`;
-        }).join('')}
+                <div class="filter-chips-row custom-scrollbar">
+                    ${sortedValues.map(v => {
+                        const isActive = (activeFilters[cat] || []).includes(v);
+                        return `<div class="filter-option ${isActive ? 'selected' : ''}" data-cat="${cat}" data-val="${v}">${labelFn(v)}</div>`;
+                    }).join('')}
                 </div>
             </div>`;
     };

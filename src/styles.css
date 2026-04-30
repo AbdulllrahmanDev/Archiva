@@ -355,34 +355,33 @@ html.dark .curator-card:hover {
 
 /* Filter Menu Flyout */
 .filter-menu-flyout {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    width: 360px;
-    background: rgba(255, 255, 255, 0.96);
-    backdrop-filter: blur(32px);
-    -webkit-backdrop-filter: blur(32px);
-    border: 1px solid rgba(59, 96, 144, 0.12);
-    border-radius: 1.5rem;
-    box-shadow: 0 24px 48px rgba(40, 52, 57, 0.14);
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 90vw;
+    max-width: 900px;
+    height: 85vh;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
+    border: 1px solid rgba(59, 96, 144, 0.15);
+    border-radius: 2rem;
+    box-shadow: 0 0 0 100vw rgba(0, 0, 0, 0.5), 0 40px 100px rgba(0, 0, 0, 0.25);
     opacity: 0;
-    transform: translateY(-8px) scale(0.98);
+    transform: translate(-50%, -45%) scale(0.95);
     pointer-events: none;
-    transition: all 0.35s var(--cubic-premium);
-    z-index: 100;
-    padding: 1.25rem;
+    transition: all 0.4s var(--cubic-premium);
+    z-index: 9999;
+    padding: 2rem;
     display: flex;
     flex-direction: column;
-    gap: 0;
-    max-height: 70vh;
-    overflow-y: auto;
-    -webkit-mask-image: -webkit-radial-gradient(white, black);
-    mask-image: radial-gradient(white, black);
+    gap: 1rem;
+    overflow: hidden;
 }
 
 .filter-menu-flyout.active {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
     pointer-events: auto;
 }
 
@@ -396,17 +395,19 @@ html.dark .filter-menu-flyout {
 .filter-option {
     display: inline-flex;
     align-items: center;
-    padding: 0.3rem 0.7rem;
-    border-radius: 999px;
+    justify-content: center;
+    text-align: center;
+    padding: 0.6rem 1rem;
+    border-radius: 1.5rem;
     cursor: pointer;
     transition: all 0.2s var(--cubic-premium);
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 800;
     letter-spacing: 0.02em;
     border: 1.5px solid var(--surface-container-highest);
     background: var(--surface-container-low);
     color: var(--on-surface-variant);
-    white-space: nowrap;
+    white-space: normal;
     user-select: none;
 }
 
@@ -430,11 +431,11 @@ html.dark .filter-menu-flyout {
 }
 
 .filter-section-group {
-    padding: 1.25rem;
-    background: var(--surface-container-low);
+    padding: 1.5rem;
+    background: var(--surface-container-lowest);
     border: 1px solid var(--outline-variant);
-    border-radius: 1.25rem;
-    margin-bottom: 0.85rem;
+    border-radius: 1.5rem;
+    margin-bottom: 1rem;
     transition: all 0.3s var(--cubic-premium);
 }
 
@@ -444,10 +445,9 @@ html.dark .filter-menu-flyout {
 }
 
 .filter-section-title {
-    font-size: 10px;
+    font-size: 14px;
     font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.05em;
     color: var(--primary);
     margin-bottom: 0.75rem;
     text-align: right;
@@ -455,18 +455,24 @@ html.dark .filter-menu-flyout {
 }
 
 .rtl-mode .filter-section-title {
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    color: var(--primary);
+    margin-bottom: 0.75rem;
     text-align: right;
+    display: block;
 }
 
 /* Horizontally scrollable chip strip */
 .filter-chips-row {
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     padding-bottom: 6px;
-    cursor: grab;
-    scrollbar-width: none; /* Hide for cleaner look */
+    max-height: 45vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
 }
 
 .filter-chips-row::-webkit-scrollbar {
@@ -642,7 +648,7 @@ select:focus {
 
 .rtl-mode .filter-menu-flyout {
     right: auto;
-    left: 0;
+    left: 50%;
 }
 
 /* Chat Scrollbar & Layout Mirroring for RTL */
