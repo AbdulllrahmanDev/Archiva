@@ -408,7 +408,7 @@ ipcMain.handle('select-files', async () => {
     }));
 });
 
-ipcMain.handle('process-uploads', async (event, files, forceAi) => {
+ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => {
     console.log(`[IPC] process-uploads: processing ${files.length} files`);
     
     currentBatch.total = files.length;
@@ -479,7 +479,7 @@ ipcMain.handle('process-uploads', async (event, files, forceAi) => {
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
                         AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite',
                         SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
-                        PDF_SPLIT_ENABLED: pdfSplitEnabled ? '1' : '0'
+                        PDF_SPLIT_ENABLED: manualSplit ? '1' : '0'
                     }
                 });
 

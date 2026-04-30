@@ -930,7 +930,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
             return None
 
     # 3. PDF Splitting Logic
-    if ext == ".pdf" and split_pdf and not skip_ai:
+    if ext == ".pdf" and split_pdf:
         print(f"Checking if PDF needs splitting: {file_name}", flush=True)
         report_status("status_split_check", 5, doc_id=doc_id, extra={"file": file_name})
         split_data = ai_detect_pdf_splits(file_path, file_name)

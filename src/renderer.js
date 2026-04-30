@@ -8,6 +8,7 @@ const pipelineVisualizer = document.getElementById('pipeline-visualizer');
 let documents = [];
 let pendingFiles = [];
 let forceAiForNextUpload = false;
+let manualSplitForNextUpload = false;
 let currentView = localStorage.getItem('archiva-last-view') || 'add';
 let archiveLayout = 'grid';
 let isSelectionMode = false;
@@ -339,11 +340,7 @@ function updateSettingsUI() {
     if (autoLabel) autoLabel.innerText = t('auto_analysis_label');
     if (autoDesc) autoDesc.innerText = t('auto_analysis_desc');
 
-    // PDF Splitting UI
-    const pdfSplitLabel = document.getElementById('pdf-split-label');
-    const pdfSplitDesc = document.getElementById('pdf-split-desc');
-    if (pdfSplitLabel) pdfSplitLabel.innerText = t('pdf_split_label');
-    if (pdfSplitDesc) pdfSplitDesc.innerText = t('pdf_split_desc');
+
 
     // Smart Project UI
     const smartProjectLabel = document.getElementById('smart-project-label');
@@ -426,15 +423,22 @@ const getViews = () => ({
                 </div>
                 <div id="staging-area" class="staging-area w-full grid grid-cols-12 gap-8 items-start">
                     <div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-2xl editorial-shadow overflow-hidden border border-outline-variant/10 flex flex-col max-h-[500px]">
-                        <div class="px-8 py-5 border-b border-outline-variant/5 bg-surface-container-low/30 flex items-center justify-between">
-                            <h3 class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">${t('staged_archival')}</h3>
-                            <div class="flex items-center gap-3">
-                                <span class="text-[9px] font-bold text-on-surface-variant/50">${currentLang === 'ar' ? 'فحص تلقائي (استثناء)' : 'Auto-Scan Override'}</span>
-                                <button id="force-ai-toggle" class="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300 pointer-events-auto bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high" type="button">
-                                    ${getIcon('auto_awesome', 'sm')}
-                                </button>
+                            <div class="px-8 py-5 border-b border-outline-variant/5 bg-surface-container-low/30 flex items-center justify-between">
+                                <h3 class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">${t('staged_archival')}</h3>
+                                <div class="flex items-center gap-3 bg-surface-container-low/40 px-3 py-2 rounded-2xl border border-outline-variant/5">
+                                    <div class="flex items-center gap-1.5 border-e border-outline-variant/10 pe-3">
+                                        <span class="text-[8px] font-black uppercase tracking-tighter text-on-surface-variant/30 leading-none">${currentLang === 'ar' ? 'خيارات ذكية' : 'Smart Options'}</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button id="manual-split-toggle" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 pointer-events-auto bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-primary" type="button" title="${currentLang === 'ar' ? 'فصل ملفات PDF' : 'Split PDFs'}">
+                                            ${getIcon('pdf', 'sm')}
+                                        </button>
+                                        <button id="force-ai-toggle" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 pointer-events-auto bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-primary" type="button" title="${currentLang === 'ar' ? 'فحص تلقائي بالذكاء' : 'Force AI Analysis'}">
+                                            ${getIcon('auto_awesome', 'sm')}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
                         <div id="pending-list" class="file-list-scroll flex-1 overflow-y-auto divide-y divide-outline-variant/5"></div>
                     </div>
                     <div class="col-span-12 lg:col-span-4 space-y-4">
@@ -1717,8 +1721,10 @@ function enterStagingState() {
     const iconWrapper = document.getElementById('upload-icon-container');
     if (iconWrapper) iconWrapper.innerHTML = getIcon('cloud_upload', 'xl');
 
-    // Reset force Ai toggler
+    // Reset toggles
     forceAiForNextUpload = false;
+    manualSplitForNextUpload = false;
+
     const forceToggle = document.getElementById('force-ai-toggle');
     if (forceToggle) {
         forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
@@ -1734,6 +1740,24 @@ function enterStagingState() {
             } else {
                 forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
                 forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+            }
+        };
+    }
+
+    const splitToggle = document.getElementById('manual-split-toggle');
+    if (splitToggle) {
+        splitToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
+        splitToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
+        splitToggle.onclick = (e) => {
+            e.stopPropagation();
+            // NO PASSWORD REQUIRED for splitting as requested
+            manualSplitForNextUpload = !manualSplitForNextUpload;
+            if (manualSplitForNextUpload) {
+                splitToggle.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
+                splitToggle.classList.add('bg-primary', 'text-white', 'shadow-md');
+            } else {
+                splitToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
+                splitToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
             }
         };
     }
@@ -1813,7 +1837,7 @@ async function confirmUploads() {
     }
 
     try {
-        const result = await window.api.processUploads(pendingFiles, forceAiForNextUpload);
+        const result = await window.api.processUploads(pendingFiles, forceAiForNextUpload, manualSplitForNextUpload);
         console.log("Backend process-uploads result:", result);
 
         if (result && result.success) {
@@ -2855,66 +2879,9 @@ if (autoAnalysisToggleBtn) {
 // Load and display current status on startup
 initAutoAnalysisToggle();
 
-// ============================================================
-// PDF SPLITTING TOGGLE LOGIC
-// ============================================================
 
-let _pdfSplitEnabled = false;
 
-function setPdfSplitUI(enabled) {
-    _pdfSplitEnabled = enabled;
-    const toggleBtn = document.getElementById('pdf-split-toggle');
-    if (!toggleBtn) return;
 
-    toggleBtn.classList.toggle('on', enabled);
-    toggleBtn.classList.toggle('off', !enabled);
-    toggleBtn.setAttribute('aria-checked', String(enabled));
-}
-
-async function initPdfSplitToggle() {
-    if (!window.api || !window.api.getPDFSplitStatus) return;
-    try {
-        const status = await window.api.getPDFSplitStatus();
-        setPdfSplitUI(status.enabled);
-    } catch (e) {
-        console.error('Failed to load PDF split status:', e);
-        setPdfSplitUI(false); // Default: disabled
-    }
-}
-
-const pdfSplitToggleBtn = document.getElementById('pdf-split-toggle');
-if (pdfSplitToggleBtn) {
-    pdfSplitToggleBtn.addEventListener('click', async () => {
-        if (!(await requestFeatureUnlock())) return;
-
-        const nextState = !_pdfSplitEnabled;
-        setPdfSplitUI(nextState);
-
-        pdfSplitToggleBtn.disabled = true;
-        pdfSplitToggleBtn.style.opacity = '0.7';
-
-        try {
-            const result = await window.api.togglePDFSplit(nextState);
-            if (result && result.success) {
-                setPdfSplitUI(result.enabled);
-                const toastKey = result.enabled
-                    ? 'pdf_split_enabled_toast'
-                    : 'pdf_split_disabled_toast';
-                showToast(toastKey, {}, 4000);
-            } else {
-                setPdfSplitUI(!nextState);
-            }
-        } catch (e) {
-            console.error('Failed to toggle PDF split:', e);
-            setPdfSplitUI(!nextState);
-        } finally {
-            pdfSplitToggleBtn.disabled = false;
-            pdfSplitToggleBtn.style.opacity = '1';
-        }
-    });
-}
-
-initPdfSplitToggle();
 
 
 // ============================================================
