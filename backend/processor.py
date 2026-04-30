@@ -750,9 +750,9 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
         GENERAL_VALUES       = {"عام"}
 
         if project_raw.lower() in TRULY_UNKNOWN_VALUES:
-            # فشل التحليل → مجلد "غير_محدد"
-            project = "غير_محدد"
-            print(f"Organize: No project detected, placing in 'غير_محدد'", flush=True)
+            # فشل التحليل أو لم يتم تحديد مشروع → لا نحرك الملف من مكانه الأصلي
+            print(f"Organize: No project detected. Keeping file at: {doc_data.get('file_path')}", flush=True)
+            return doc_data.get("file_path")
         elif project_raw.lower() in GENERAL_VALUES:
             # وثيقة عامة مقصودة → مجلد "عام"
             project = "عام"
@@ -857,7 +857,7 @@ def organize_file_copy(doc_data, base_archive_path, smart_match=True):
     return None
 
 
-def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None, split_pdf=False, smart_match=True):
+def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False, doc_id=None, split_pdf=False, smart_match=True, skip_organize=False):
     """
     1. Extracts text via OCR or basic text extraction
     2. Sends to AI for metadata extraction (or mocks it if skip_ai=True)
@@ -1044,18 +1044,22 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         }
 
         # Perform Hierarchical Organization: Year / Project / File
-        report_status("status_organizing", 90, doc_id=file_id)
-        organized_path = organize_file_copy(doc_data, output_folder, smart_match=smart_match)
-        
-        if isinstance(organized_path, dict) and organized_path.get("needs_confirmation"):
-            print(json.dumps({
-                "type": "needs_confirmation",
-                "doc_id": file_id,
-                "doc_data": doc_data,
-                "similar": organized_path["similar"],
-                "new_project": organized_path["new"]
-            }, ensure_ascii=False), flush=True)
-            return None # Let Node.js handle it after user confirmation
+        if skip_organize:
+            organized_path = file_path
+            print(f"Passive Mode: Skipping organization for {file_name}. File remains at original location.", flush=True)
+        else:
+            report_status("status_organizing", 90, doc_id=file_id)
+            organized_path = organize_file_copy(doc_data, output_folder, smart_match=smart_match)
+            
+            if isinstance(organized_path, dict) and organized_path.get("needs_confirmation"):
+                print(json.dumps({
+                    "type": "needs_confirmation",
+                    "doc_id": file_id,
+                    "doc_data": doc_data,
+                    "similar": organized_path["similar"],
+                    "new_project": organized_path["new"]
+                }, ensure_ascii=False), flush=True)
+                return None # Let Node.js handle it after user confirmation
 
         # ── Critical: Only proceed if file was successfully organized ──────
         if not organized_path or not os.path.exists(organized_path):
@@ -1081,12 +1085,13 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
         sidecar_path = os.path.splitext(current_file_path)[0] + ".json"
 
         # Save Consolidated JSON Sidecar
-        sidecar_data = {k: v for k, v in doc_data.items() if k != "content"}
-        sidecar_data["content_preview"] = content[:500] if content else ""
+        if not skip_organize:
+            sidecar_data = {k: v for k, v in doc_data.items() if k != "content"}
+            sidecar_data["content_preview"] = content[:500] if content else ""
 
-        with open(sidecar_path, "w", encoding="utf-8") as f:
-            json.dump(sidecar_data, f, ensure_ascii=False, indent=2)
-        hide_file(sidecar_path)
+            with open(sidecar_path, "w", encoding="utf-8") as f:
+                json.dump(sidecar_data, f, ensure_ascii=False, indent=2)
+            hide_file(sidecar_path)
 
         # Add to DB
         report_status("status_saving", 95, doc_id=file_id)

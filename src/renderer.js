@@ -422,17 +422,7 @@ const getViews = () => ({
     add: `
         <div id="add-view-container" class="relative flex flex-col items-center justify-center min-h-[80vh] px-6 animate-fade-in overflow-hidden">
             <!-- Full Page Drag Overlay (Blurred Backdrop) -->
-            <div id="drag-overlay" class="absolute inset-0 z-[100] bg-background/80 backdrop-blur-2xl opacity-0 pointer-events-none transition-all duration-300">
-                <!-- Adjusted to pt-64 to follow the button's shift -->
-                <div class="flex flex-col items-center min-h-full pt-64">
-                    <div class="w-32 h-32 md:w-40 md:h-40 bg-primary text-white rounded-[2rem] flex items-center justify-center shadow-2xl shadow-primary/40 animate-bounce">
-                        ${getIcon('cloud_upload', 'xl')}
-                    </div>
-                    <!-- Slightly reduced margin as requested -->
-                    <div class="mt-24 text-center">
-                        <p class="text-lg font-black text-primary uppercase tracking-[0.2em] animate-pulse">${currentLang === 'ar' ? 'أفلت الملفات الآن' : 'Drop Files Now'}</p>
-                    </div>
-                </div>
+            <div id="drag-overlay" class="absolute inset-0 z-[100] opacity-0 pointer-events-none transition-all duration-500 flex items-center justify-center" style="backdrop-filter: blur(48px); -webkit-backdrop-filter: blur(48px); -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 70%); mask-image: radial-gradient(circle at center, black 0%, transparent 70%); background: radial-gradient(circle at center, rgba(var(--primary-rgb), 0.05) 0%, transparent 60%);">
             </div>
 
             <div class="relative z-10 w-full max-w-5xl flex flex-col items-center">
@@ -1134,7 +1124,7 @@ function switchView(viewName) {
                 addContainer.addEventListener('dragenter', (e) => {
                     e.preventDefault();
                     dragCounter++;
-                    dragOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                    dragOverlay.classList.remove('opacity-0');
                     dragOverlay.classList.add('opacity-100');
                 });
 
@@ -1146,7 +1136,7 @@ function switchView(viewName) {
                     dragCounter--;
                     if (dragCounter === 0) {
                         dragOverlay.classList.remove('opacity-100');
-                        dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+                        dragOverlay.classList.add('opacity-0');
                     }
                 });
 
@@ -1154,16 +1144,24 @@ function switchView(viewName) {
                     e.preventDefault();
                     dragCounter = 0;
                     dragOverlay.classList.remove('opacity-100');
-                    dragOverlay.classList.add('opacity-0', 'pointer-events-none');
+                    dragOverlay.classList.add('opacity-0');
                     
                     const dt = e.dataTransfer;
                     if (dt.files && dt.files.length > 0) {
-                        const files = Array.from(dt.files).map(f => ({
-                            name: f.name,
-                            path: f.path,
-                            size: f.size
-                        }));
+                        const files = Array.from(dt.files).map(f => {
+                            const actualPath = (window.api && window.api.getPathForFile) ? window.api.getPathForFile(f) : f.path;
+                            return {
+                                name: f.name,
+                                path: actualPath || '',
+                                size: f.size
+                            };
+                        }).filter(f => f.path.trim() !== '');
                         
+                        if (files.length === 0) {
+                            showToast(currentLang === 'ar' ? 'عذراً، لا يمكن معالجة هذا الملف' : 'Sorry, invalid file');
+                            return;
+                        }
+
                         const newFiles = files.filter(f => !pendingFiles.some(pf => pf.path === f.path));
                         pendingFiles = [...pendingFiles, ...newFiles];
                         enterStagingState();
@@ -1505,6 +1503,35 @@ function getTimeRangeGroup(dateStr) {
     return 'older';
 }
 
+function formatDateWithTime(dateStr) {
+    if (!dateStr) return '';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return dateStr;
+        
+        // Check if it's just a date (no 'T' in string usually means old format)
+        if (typeof dateStr === 'string' && !dateStr.includes('T') && !dateStr.includes(':')) {
+            return dateStr; // Preserve old format for legacy records
+        }
+
+        const date = d.toLocaleDateString(currentLang === 'ar' ? 'ar-EG' : 'en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        
+        const time = d.toLocaleTimeString(currentLang === 'ar' ? 'ar-EG' : 'en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+        
+        return `${date} | ${time}`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+
 function groupDocumentsByDate(docs) {
     const groups = {
         today: [],
@@ -1650,8 +1677,10 @@ function renderGridCard(doc) {
                 </div>
                 <div class="pt-3 border-t border-outline-variant/5 flex items-center justify-between">
                     <div class="flex flex-col gap-0.5">
-                        <span class="text-[8px] font-black text-on-surface-variant/30 uppercase tracking-widest">${doc.doc_date || doc.date_added}</span>
-                        <span class="text-[8px] font-black text-primary/40 uppercase tracking-widest">إصدار ${doc.version_no || '1.0'}</span>
+                        <span class="text-[8px] font-black text-on-surface-variant/30 uppercase tracking-widest">${doc.doc_date || formatDateWithTime(doc.date_added)}</span>
+                        ${doc.version_no && doc.version_no !== '1.0' ? `
+                        <span class="text-[8px] font-black text-primary/40 uppercase tracking-widest">${currentLang === 'ar' ? 'الرقم' : 'No.'} ${doc.version_no}</span>
+                        ` : ''}
                     </div>
                     <div class="text-primary flip-rtl">${getIcon('arrow_outward', 'sm')}</div>
                 </div>
@@ -1724,13 +1753,15 @@ function renderListRow(doc) {
                         <span class="text-[9px] text-on-surface-variant uppercase tracking-widest font-black">${doc.type}</span>
                         ${doc.project ? `<span class="text-[9px] text-primary/60 uppercase tracking-widest font-black">• ${doc.project}</span>` : ''}
                         ${doc.subject ? `<span class="text-[9px] text-on-surface-variant/40 uppercase tracking-widest font-black">• ${doc.subject}</span>` : ''}
-                        <span class="text-[9px] text-on-surface-variant/30 uppercase tracking-widest font-black">• ${doc.doc_date || doc.date_added}</span>
-                        <span class="text-[9px] text-on-surface-variant/20 uppercase tracking-widest font-black">• v${doc.version_no}</span>
+                        <span class="text-[9px] text-on-surface-variant/30 uppercase tracking-widest font-black">• ${doc.doc_date || formatDateWithTime(doc.date_added)}</span>
+                        ${doc.version_no && doc.version_no !== '1.0' ? `
+                        <span class="text-[9px] text-on-surface-variant/20 uppercase tracking-widest font-black">• ${currentLang === 'ar' ? 'الرقم' : 'No.'} ${doc.version_no}</span>
+                        ` : ''}
                     </div>
                 </div>
             </div>
-            <div class="col-span-4 flex items-center justify-end gap-6 text-sm text-on-surface-variant font-medium">
-                ${doc.date_added}
+            <div class="col-span-4 flex items-center justify-end gap-6 text-[10px] text-on-surface-variant/60 font-black uppercase tracking-widest">
+                ${formatDateWithTime(doc.date_added)}
                 ${!isSelectionMode ? `
                     <button class="delete-doc-btn p-2 text-on-surface-variant/20 hover:text-error rounded-lg transition-all opacity-0 group-hover:opacity-100" data-id="${doc.id}" data-path="${doc.file_path.replace(/\\/g, '\\\\')}">
                         ${getIcon('delete', 'sm')}
@@ -1929,7 +1960,7 @@ function renderPendingList() {
         return `
             <div class="px-8 py-4 flex items-center justify-between group">
                 <div class="flex items-center gap-4">
-                    <div class="text-primary opacity-40 hover:opacity-100 cursor-pointer transition-all active:scale-95" onclick="openPreview('${file.path.replace(/\\/g, '\\\\')}', '${ext}', '${file.name.replace(/'/g, "\\'")}')" title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
+                    <div class="text-primary opacity-40 hover:opacity-100 cursor-pointer transition-all active:scale-95" onclick="openPreview('${(file.path || '').replace(/\\/g, '\\\\')}', '${ext}', '${(file.name || '').replace(/'/g, "\\'")}')" title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
                         ${getIcon(icon)}
                     </div>
                     <div>
@@ -2129,7 +2160,7 @@ function selectDocument(id, isSoftUpdate = false) {
                         </button>
                     </div>
                 </div>
-                <p class="text-center text-[9px] text-on-surface-variant/40 font-bold">${t('last_analyzed')}: ${doc.date_added}</p>
+                <p class="text-center text-[9px] text-on-surface-variant/40 font-bold">${t('last_analyzed')}: ${formatDateWithTime(doc.date_added)}</p>
             </div>
         </div>
     `;

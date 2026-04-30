@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     onDocumentsUpdate: (callback) => {
@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('api', {
     },
     getDocuments: () => ipcRenderer.invoke('get-documents'),
     selectFiles: () => ipcRenderer.invoke('select-files'),
+    getPathForFile: (file) => {
+        if (webUtils && webUtils.getPathForFile) {
+            return webUtils.getPathForFile(file);
+        }
+        return file.path;
+    },
     processUploads: (files, forceAi, manualSplit) => ipcRenderer.invoke('process-uploads', files, forceAi, manualSplit),
     getFileData: (filePath) => ipcRenderer.invoke('get-file-data', filePath),
     openPath: (path) => ipcRenderer.invoke('open-path', path),

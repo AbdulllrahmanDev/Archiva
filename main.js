@@ -440,7 +440,7 @@ ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => 
         });
     }
 
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = new Date().toISOString();
 
     try {
         const tasks = files.map(async (file) => {

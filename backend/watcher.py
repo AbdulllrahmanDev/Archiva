@@ -143,21 +143,29 @@ class ArchiveHandler(FileSystemEventHandler):
             if os.path.exists(sidecar_early):
                 print(f"Watcher: Skipping {file_name} — sidecar arrived (race condition handled).", flush=True)
                 return
-
-            skip_ai = not _read_sentinel_enabled()
-
-            # Check for force_ai override
+            # ── 1. التحقق من حالة التحليل التلقائي (Sentinel Check) ────────
+            auto_enabled = _read_sentinel_enabled()
+            
+            # Check for force_ai override (e.g. from "Analyze" button in UI)
             sentinel_dir = os.path.join(self.folder_path, '.archiva')
             force_ai_file = os.path.join(sentinel_dir, f'force_ai_{file_id}.tmp')
-            if os.path.exists(force_ai_file):
+            force_ai = os.path.exists(force_ai_file)
+
+            # إذا كان التحليل التلقائي معطلاً، سنقوم بإضافة الملف للبرنامج دون تحليله ودون نقله (Passive Indexing)
+            skip_ai = not auto_enabled
+            skip_organize = not auto_enabled
+
+            if force_ai:
                 skip_ai = False
+                skip_organize = False # الطلب اليدوي يعني أرشفة كاملة
                 try: os.remove(force_ai_file)
                 except: pass
 
             split_pdf = _read_sentinel_split_enabled()
             smart_match = _read_sentinel_smart_match_enabled()
 
-            process_file(src_path, self.folder_path, skip_ai=skip_ai, split_pdf=split_pdf, smart_match=smart_match)
+            # ── 2. البدء بالمعالجة ──────────────────────────────────────────
+            process_file(src_path, self.folder_path, skip_ai=skip_ai, skip_organize=skip_organize, split_pdf=split_pdf, smart_match=smart_match)
         except Exception as e:
             print(f"Error processing {src_path}: {e}", flush=True)
         finally:
