@@ -12,6 +12,7 @@ let manualSplitForNextUpload = false;
 let currentView = localStorage.getItem('archiva-last-view') || 'add';
 let archiveLayout = 'grid';
 let isSelectionMode = false;
+let selectedDocIds = new Set();
 let activeFilters = { type: [], class: [], area: [], year: [], project: [], recency: false };
 
 let viewsInitialized = false;
@@ -307,8 +308,7 @@ const i18n = {
 
 let currentLang = localStorage.getItem('archiva-lang') || 'ar';
 let currentTheme = localStorage.getItem('archiva-theme') || 'light';
-let selectedDocIds = new Set();
-let isFeaturesUnlocked = true; // Always unlocked as per user request
+let isFeaturesUnlocked = true;
 
 const FEATURE_PASSWORD = "Archiva2026";
 
@@ -417,7 +417,7 @@ function t(key, data = {}) {
 
 const getViews = () => ({
     add: `
-        <div id="add-view-container" class="relative flex flex-col items-center justify-center min-h-[80vh] px-6 animate-fade-in text-white/0 overflow-hidden">
+        <div id="add-view-container" class="relative flex flex-col items-center justify-center min-h-[80vh] px-6 animate-fade-in overflow-hidden">
             <!-- Full Page Drag Overlay (Blurred Backdrop) -->
             <div id="drag-overlay" class="absolute inset-0 z-[100] bg-background/80 backdrop-blur-2xl opacity-0 pointer-events-none transition-all duration-300">
                 <!-- Adjusted to pt-64 to follow the button's shift -->
@@ -452,7 +452,7 @@ const getViews = () => ({
                                 <h3 class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant font-label">${t('staged_archival')}</h3>
                                 <div class="flex items-center gap-3 bg-surface-container-low/40 px-3 py-2 rounded-2xl border border-outline-variant/5">
                                     <div class="flex items-center gap-1.5 border-e border-outline-variant/10 pe-3">
-                                        <span class="text-[8px] font-black uppercase tracking-tighter text-on-surface-variant/30 leading-none">${currentLang === 'ar' ? 'خيارات ذكية' : 'Smart Options'}</span>
+                                        <span class="text-[8px] font-black uppercase tracking-tighter text-on-surface-variant leading-none">${currentLang === 'ar' ? 'خيارات ذكية' : 'Smart Options'}</span>
                                     </div>
                                     <div class="flex items-center gap-2">
                                         <button id="manual-split-toggle" class="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 pointer-events-auto bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high hover:text-primary" type="button" title="${currentLang === 'ar' ? 'فصل ملفات PDF' : 'Split PDFs'}">
