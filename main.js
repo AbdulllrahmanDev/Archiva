@@ -943,7 +943,7 @@ ipcMain.handle('stop-backend', async () => {
 
         return { success: true };
     } catch (err) {
-        isForceStopped = false; // Always reset on error too
+        isForceStopped = false; 
         console.error('Force stop error:', err);
         return { success: false, error: err.message };
     }

@@ -294,7 +294,7 @@ let currentLang = localStorage.getItem('archiva-lang') || 'ar';
 let currentTheme = localStorage.getItem('archiva-theme') || 'light';
 let selectedDocIds = new Set();
 let isFeaturesUnlocked = localStorage.getItem('archiva-features-unlocked') === 'true';
-const FEATURE_PASSWORD = "Archiva1995";
+const FEATURE_PASSWORD = "Archiva2026";
 
 function setTheme(theme) {
     currentTheme = theme;
@@ -596,6 +596,11 @@ function updateLayoutDirection() {
     if (navAi) navAi.title = t('nav_ai');
 
     viewsInitialized = false;
+    // Security check: If starting on AI view but locked, redirect to add
+    if (currentView === 'ai' && !isFeaturesUnlocked) {
+        currentView = 'add';
+        localStorage.setItem('archiva-last-view', 'add');
+    }
     switchView(currentView);
     moveNavIndicator(currentView);
     updatePipelineUI();
@@ -2805,7 +2810,7 @@ async function initAutoAnalysisToggle() {
         setAutoAnalysisUI(status.enabled, status.activatedAt);
     } catch (e) {
         console.error('Failed to load auto-analysis status:', e);
-        setAutoAnalysisUI(true, null); // Fallback: show as enabled
+        setAutoAnalysisUI(false, null); // Fallback: show as disabled to save costs/security
     }
 }
 
