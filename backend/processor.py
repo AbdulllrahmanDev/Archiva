@@ -1018,7 +1018,7 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
                 )
                 ai_data = mock_ai_analyze(content, file_name)
 
-        date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        date_str = datetime.datetime.now().isoformat()
 
         doc_data = {
             "id": file_id,

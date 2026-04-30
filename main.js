@@ -48,6 +48,7 @@ let autoAnalysisEnabled = false;
 let autoAnalysisActivatedAt = null;
 let pdfSplitEnabled = false;
 let smartProjectMatchingEnabled = false;
+let featuresUnlocked = false; // Persistent unlock state
 let activeProcesses = new Set();
 let isForceStopped = false;
 
@@ -77,10 +78,26 @@ function loadAutoAnalysisConfig() {
 
     autoAnalysisActivatedAt = config.autoAnalysisActivatedAt || null;
     pdfSplitEnabled = config.pdfSplitEnabled === true; // Default false to prevent automatic background splitting
-    smartProjectMatchingEnabled = config.smartProjectMatchingEnabled !== false; // Default true
+    smartProjectMatchingEnabled = config.smartProjectMatchingEnabled === true; // Default false
+    featuresUnlocked = config.featuresUnlocked === true; // Persist across updates
     console.log(`Auto-Analysis: ${autoAnalysisEnabled ? 'ENABLED' : 'DISABLED'}, ActivatedAt: ${autoAnalysisActivatedAt || 'N/A'}`);
     console.log(`PDF Splitting: ${pdfSplitEnabled ? 'ENABLED' : 'DISABLED'}`);
     console.log(`Smart Project Matching: ${smartProjectMatchingEnabled ? 'ENABLED' : 'DISABLED'}`);
+    console.log(`Features Status: ${featuresUnlocked ? 'UNLOCKED' : 'LOCKED'}`);
+}
+
+function saveConfig(updates) {
+    const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
+    let config = {};
+    if (fs.existsSync(configPath)) {
+        try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+    }
+    const newConfig = { ...config, ...updates };
+    try {
+        fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2));
+    } catch (e) {
+        console.error('Error saving config:', e);
+    }
 }
 
 function initStorage() {
@@ -1582,6 +1599,22 @@ ipcMain.handle('check-for-updates-manual', async () => {
 });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+ipcMain.handle('get-features-unlock-status', () => {
+    return featuresUnlocked;
+});
+
+ipcMain.handle('validate-feature-password', (event, password) => {
+    // The password can be set in .env (development) or .env.enc (production)
+    const MASTER_PASSWORD = process.env.FEATURE_PASSWORD || "Archiva2026";
+    
+    if (password === MASTER_PASSWORD) {
+        featuresUnlocked = true;
+        saveConfig({ featuresUnlocked: true });
+        return { success: true };
+    }
+    return { success: false };
+});
 
 // Initialize on app start
 app.whenReady().then(() => {

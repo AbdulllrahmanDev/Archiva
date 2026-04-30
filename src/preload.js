@@ -67,5 +67,7 @@ contextBridge.exposeInMainWorld('api', {
     onUpdateDownloaded: (callback) => ipcRenderer.on('update_downloaded', (event, info) => callback(info)),
     restartApp: () => ipcRenderer.send('restart_app'),
     checkForUpdatesManual: () => ipcRenderer.invoke('check-for-updates-manual'),
-    getAppVersion: () => ipcRenderer.invoke('get-app-version')
+    getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    getFeaturesUnlockStatus: () => ipcRenderer.invoke('get-features-unlock-status'),
+    validateFeaturePassword: (password) => ipcRenderer.invoke('validate-feature-password', password)
 });

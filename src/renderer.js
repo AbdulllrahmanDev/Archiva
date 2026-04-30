@@ -18,6 +18,7 @@ let activeFilters = { type: [], class: [], area: [], year: [], project: [], rece
 let viewsInitialized = false;
 let activeDocId = null; 
 let _autoAnalysisEnabled = false;
+let _pdfSplitEnabled = false;
 let _smartProjectEnabled = false;
 let chatHistory = [];
 let pendingAttachments = [];
@@ -180,8 +181,8 @@ const i18n = {
         step_organize: "Organize",
         step_ready: "Ready",
         stop_analysis: "Stop Analysis",
-        smart_project_label: "Smart Project Matching",
-        smart_project_desc: "Automatically group similar projects (e.g., Cairo water vs Cairo sewage)",
+        smart_project_label: "Smart Project Matching (Maintenance)",
+        smart_project_desc: "This feature is currently under maintenance and cannot be enabled.",
         smart_project_enabled_toast: "Smart Project Matching enabled.",
         smart_project_disabled_toast: "Smart Project Matching disabled.",
         similarity_title: "Project Similarity Match",
@@ -201,7 +202,9 @@ const i18n = {
         password_message: "Please enter the password to unlock these features.",
         unlock_btn: "Unlock Features",
         wrong_password: "Incorrect Password",
-        open_in_system: "Open in System"
+        open_in_system: "Open in System",
+        access_granted: "Access Granted: Premium features unlocked.",
+        access_denied: "Access Denied: Incorrect password."
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -279,8 +282,8 @@ const i18n = {
         pdf_split_desc: "فصل ملفات PDF التي تحتوي على عدة مشاريع تلقائياً",
         pdf_split_enabled_toast: "تم تفعيل خاصية فصل الملفات.",
         pdf_split_disabled_toast: "تم إيقاف خاصية فصل الملفات.",
-        smart_project_label: "الربط الذكي للمشاريع",
-        smart_project_desc: "تجميع المشاريع المتشابهة تلقائياً (مثل مياه القاهرة وصرف القاهرة)",
+        smart_project_label: "الربط الذكي للمشاريع (تحت الصيانة)",
+        smart_project_desc: "هذه الميزة تحت الصيانة حالياً ولا يمكن تفعيلها",
         smart_project_enabled_toast: "تم تفعيل الربط الذكي للمشاريع.",
         smart_project_disabled_toast: "تم إيقاف الربط الذكي للمشاريع.",
         stop_label: "إيقاف إجباري",
@@ -302,15 +305,15 @@ const i18n = {
         password_message: "يرجى إدخال كلمة السر لفتح هذه الخصائص",
         unlock_btn: "فتح الخصائص",
         wrong_password: "كلمة السر خاطئة",
-        open_in_system: "فتح في النظام"
+        open_in_system: "فتح في النظام",
+        access_granted: "تم السماح بالوصول: تم فتح الميزات الخاصة.",
+        access_denied: "تم رفض الوصول: كلمة السر غير صحيحة."
     }
 };
 
 let currentLang = localStorage.getItem('archiva-lang') || 'ar';
 let currentTheme = localStorage.getItem('archiva-theme') || 'light';
-let isFeaturesUnlocked = true;
-
-const FEATURE_PASSWORD = "Archiva2026";
+let isFeaturesUnlocked = false;
 
 function setTheme(theme) {
     currentTheme = theme;
@@ -2108,7 +2111,7 @@ function selectDocument(id, isSoftUpdate = false) {
                             </div>
                         </button>
                         ` : `
-                        <button id="re-analyze-btn" class="w-14 h-14 bg-primary/5 text-primary flex items-center justify-center rounded-xl hover:bg-primary/20 active:scale-95 transition-all group/re border border-primary/20 shadow-lg shadow-primary/5" title="${currentLang === 'ar' ? 'تحليل ذكي' : 'AI Analysis'}">
+                        <button id="re-analyze-btn" class="w-14 h-14 bg-primary/5 text-primary flex items-center justify-center rounded-xl hover:bg-primary/20 active:scale-95 transition-all group/re border border-primary/20 shadow-lg shadow-primary/5 ${_autoAnalysisEnabled ? '' : 'opacity-30 cursor-not-allowed grayscale'}" title="${_autoAnalysisEnabled ? (currentLang === 'ar' ? 'تحليل ذكي' : 'AI Analysis') : (currentLang === 'ar' ? 'الذكاء الاصطناعي معطل' : 'AI Analysis Disabled')}">
                             <div class="group-hover/re:scale-110 group-hover/re:rotate-[15deg] transition-transform duration-500">
                                 ${getIcon('auto_awesome', 'sm')}
                             </div>
@@ -2157,6 +2160,10 @@ function selectDocument(id, isSoftUpdate = false) {
         if (reanalyzeBtn && !isProcessing) {
             reanalyzeBtn.onclick = async (e) => {
                 e.stopPropagation();
+                if (!_autoAnalysisEnabled) {
+                    showToast(currentLang === 'ar' ? 'يرجى تفعيل التحليل الذكي من الإعدادات أولاً' : 'Please enable AI Analysis in settings first');
+                    return;
+                }
                 // Play visual feedback immediately
                 reanalyzeBtn.classList.add('bg-primary/20', 'scale-95');
                 setTimeout(() => reanalyzeBtn.classList.remove('bg-primary/20', 'scale-95'), 150);
@@ -2950,8 +2957,60 @@ if (autoAnalysisToggleBtn) {
     });
 }
 
-// Load and display current status on startup
+function setPDFSplitUI(enabled) {
+    _pdfSplitEnabled = enabled;
+    const toggleBtn = document.getElementById('pdf-split-toggle');
+    if (!toggleBtn) return;
+
+    if (enabled) {
+        toggleBtn.classList.remove('off');
+        toggleBtn.classList.add('on');
+        toggleBtn.setAttribute('aria-checked', 'true');
+    } else {
+        toggleBtn.classList.remove('on');
+        toggleBtn.classList.add('off');
+        toggleBtn.setAttribute('aria-checked', 'false');
+    }
+}
+
+async function initPDFSplitToggle() {
+    if (!window.api || !window.api.getPDFSplitStatus) return;
+    try {
+        const status = await window.api.getPDFSplitStatus();
+        setPDFSplitUI(status.enabled);
+    } catch (e) {
+        console.error('Failed to load PDF split status:', e);
+        setPDFSplitUI(false);
+    }
+}
+
+const pdfSplitToggleBtn = document.getElementById('pdf-split-toggle');
+if (pdfSplitToggleBtn) {
+    pdfSplitToggleBtn.addEventListener('click', async () => {
+        const nextState = !_pdfSplitEnabled;
+        setPDFSplitUI(nextState);
+        pdfSplitToggleBtn.disabled = true;
+
+        try {
+            const result = await window.api.togglePDFSplit(nextState);
+            if (result && result.success) {
+                setPDFSplitUI(result.enabled);
+                showToast(result.enabled ? 'pdf_split_enabled_toast' : 'pdf_split_disabled_toast', {}, 4000);
+                updatePipelineUI();
+            } else {
+                setPDFSplitUI(!nextState);
+            }
+        } catch (e) {
+            console.error('Failed to toggle PDF split:', e);
+            setPDFSplitUI(!nextState);
+        } finally {
+            pdfSplitToggleBtn.disabled = false;
+        }
+    });
+}
+
 initAutoAnalysisToggle();
+initPDFSplitToggle();
 
 
 
@@ -2965,55 +3024,29 @@ initAutoAnalysisToggle();
 // moved to top
 
 function setSmartProjectUI(enabled) {
-    _smartProjectEnabled = enabled;
+    // Force disabled during maintenance
+    _smartProjectEnabled = false;
     const toggleBtn = document.getElementById('smart-project-toggle');
     if (!toggleBtn) return;
 
-    toggleBtn.classList.toggle('on', enabled);
-    toggleBtn.classList.toggle('off', !enabled);
-    toggleBtn.setAttribute('aria-checked', String(enabled));
+    toggleBtn.classList.remove('on');
+    toggleBtn.classList.add('off', 'opacity-20', 'cursor-not-allowed');
+    toggleBtn.setAttribute('aria-checked', 'false');
+    toggleBtn.disabled = true;
 }
 
 async function initSmartProjectToggle() {
-    if (!window.api || !window.api.getSmartProjectStatus) return;
-    try {
-        const status = await window.api.getSmartProjectStatus();
-        setSmartProjectUI(status.enabled);
-    } catch (e) {
-        console.error('Failed to load Smart Project status:', e);
-        setSmartProjectUI(true); // Default: enabled
-    }
+    // Always disabled during maintenance
+    setSmartProjectUI(false);
 }
 
 const smartProjectToggleBtn = document.getElementById('smart-project-toggle');
 if (smartProjectToggleBtn) {
-    smartProjectToggleBtn.addEventListener('click', async () => {
-
-        const nextState = !_smartProjectEnabled;
-        setSmartProjectUI(nextState);
-
-        smartProjectToggleBtn.disabled = true;
-        smartProjectToggleBtn.style.opacity = '0.7';
-
-        try {
-            const result = await window.api.toggleSmartProject(nextState);
-            if (result && result.success) {
-                setSmartProjectUI(result.enabled);
-                const toastKey = result.enabled
-                    ? 'smart_project_enabled_toast'
-                    : 'smart_project_disabled_toast';
-                showToast(toastKey, {}, 4000);
-            } else {
-                setSmartProjectUI(!nextState);
-            }
-        } catch (e) {
-            console.error('Failed to toggle Smart Project matching:', e);
-            setSmartProjectUI(!nextState);
-        } finally {
-            smartProjectToggleBtn.disabled = false;
-            smartProjectToggleBtn.style.opacity = '1';
-        }
-    });
+    /* 
+smartProjectToggleBtn?.addEventListener('click', async () => {
+    // Feature disabled during maintenance
+});
+*/
 }
 
 // ============================================================
@@ -3151,7 +3184,7 @@ if (window.api.onProjectSimilarityAsk) {
 // AUTO-UPDATE UI LOGIC (Premium Modal)
 // ============================================================
 
-function showUpdateModal(title, message, onConfirm, showProgress = false) {
+function showUpdateModal(title, message, onConfirm, showProgress = false, notes = null) {
     const modal = document.getElementById('update-modal');
     const titleEl = document.getElementById('update-modal-title');
     const msgEl = document.getElementById('update-modal-message');
@@ -3159,6 +3192,8 @@ function showUpdateModal(title, message, onConfirm, showProgress = false) {
     const nowBtn = document.getElementById('update-now-btn');
     const actions = document.getElementById('update-modal-actions');
     const progressContainer = document.getElementById('update-progress-container');
+    const notesWrapper = document.getElementById('update-notes-wrapper');
+    const notesEl = document.getElementById('update-modal-notes');
     const content = modal.querySelector('.modal-content');
 
     if (!modal) return;
@@ -3166,6 +3201,18 @@ function showUpdateModal(title, message, onConfirm, showProgress = false) {
     titleEl.innerText = title;
     msgEl.innerText = message;
     
+    // Handle Release Notes
+    if (notes && notesWrapper && notesEl) {
+        notesWrapper.classList.remove('hidden');
+        if (Array.isArray(notes)) {
+            notesEl.innerHTML = `<ul class="list-disc list-inside space-y-1">${notes.map(n => `<li>${n}</li>`).join('')}</ul>`;
+        } else {
+            notesEl.innerHTML = notes.replace(/\n/g, '<br>');
+        }
+    } else if (notesWrapper) {
+        notesWrapper.classList.add('hidden');
+    }
+
     laterBtn.innerText = t('update_later');
     nowBtn.innerText = t('update_now');
 
@@ -3232,32 +3279,52 @@ if (window.api && window.api.onUpdateAvailable) {
     });
 }
 
+// --- CUSTOMIZE RELEASE NOTES HERE ---
+const DEFAULT_RELEASE_NOTES = [
+    "تم اصلاح العديد من المشاكل",
+    "واضافة العديد من المزايا بنفس الوقت"
+];
+
 async function syncUpdateStatus(silent = true) {
     const btn = document.getElementById('manual-update-btn');
     const versionText = document.getElementById('update-version-text');
-    const dot = document.getElementById('update-indicator-dot');
-    if (!btn || !versionText || !dot) return;
+    if (!btn || !versionText) return;
 
     try {
         const currentVersion = await window.api.getAppVersion();
         const result = await window.api.checkForUpdatesManual();
 
         if (result.success && result.updateInfo && result.updateInfo.version !== currentVersion) {
-            btn.classList.add('border-primary/40', 'text-primary/80');
-            btn.classList.remove('text-on-surface-variant/50');
-            dot.classList.remove('bg-outline-variant/40');
-            dot.classList.add('bg-primary', 'animate-pulse');
+            btn.classList.add('text-primary/80');
+            btn.classList.remove('text-on-surface-variant/40', 'pointer-events-none', 'cursor-default');
             
             const comparison = t('version_comparison', { current: currentVersion, new: result.updateInfo.version });
-            versionText.innerText = `Archiva ${comparison}`;
+            versionText.innerHTML = `
+                <div id="update-badge-container" class="mb-1">
+                    <span class="px-2 py-0.5 bg-primary text-white rounded-lg text-[8px] font-black uppercase tracking-tighter shadow-sm animate-bounce-subtle">${t('update_avail_status')}</span>
+                </div>
+                <div class="flex items-center gap-1 font-bold" dir="ltr">
+                    <span class="text-[9px] tracking-[0.2em]">Archiva</span>
+                    <span class="font-mono text-[10px]">${comparison}</span>
+                </div>
+                <div class="flex justify-center mt-1">
+                    <div id="update-indicator-dot" class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-sm"></div>
+                </div>
+            `;
             btn.disabled = false;
         } else {
-            btn.classList.remove('border-primary/40', 'text-primary/80');
-            btn.classList.add('text-on-surface-variant/50');
-            dot.classList.add('bg-outline-variant/40');
-            dot.classList.remove('bg-primary', 'animate-pulse');
+            btn.classList.add('text-on-surface-variant/40', 'pointer-events-none', 'cursor-default');
+            btn.classList.remove('text-primary/80');
             
-            versionText.innerText = `Archiva v${currentVersion} (${t('latest_status')})`;
+            versionText.innerHTML = `
+                <div id="update-badge-container" class="mb-1">
+                    <span class="px-2 py-0.5 bg-outline-variant/10 text-on-surface-variant/40 rounded-lg text-[8px] font-black uppercase tracking-tighter border border-outline-variant/5">${t('latest_status')}</span>
+                </div>
+                <div class="flex items-center gap-1 opacity-40 font-bold" dir="ltr">
+                    <span class="text-[9px] tracking-[0.2em]">Archiva</span>
+                    <span class="font-mono text-[10px]">v${currentVersion}</span>
+                </div>
+            `;
             btn.disabled = true;
         }
     } catch (e) {
@@ -3269,15 +3336,17 @@ async function handleManualUpdateCheck() {
     const btn = document.getElementById('manual-update-btn');
     if (!btn || btn.disabled) return;
 
-    // If button is enabled, it means an update was found by syncUpdateStatus
-    // We can trigger the download or show the modal again if it was closed
     const result = await window.api.checkForUpdatesManual();
     if (result.success && result.updateInfo) {
+        // You can get real notes from result.updateInfo.releaseNotes or use our default
+        const notes = result.updateInfo.releaseNotes || DEFAULT_RELEASE_NOTES;
+        
         showUpdateModal(
             t('update_title'), 
             t('update_available_msg'), 
             () => {}, 
-            true
+            true,
+            notes
         );
     }
 }
@@ -3424,3 +3493,74 @@ document.addEventListener('keydown', (e) => {
         undoAction();
     }
 });
+
+// ============================================================
+// SECURE FEATURE LOCK SYSTEM
+// ============================================================
+
+let _featuresUnlocked = false;
+
+async function initFeaturesLock() {
+    if (!window.api || !window.api.getFeaturesUnlockStatus) return;
+    _featuresUnlocked = await window.api.getFeaturesUnlockStatus();
+    updateFeatureLockUI();
+}
+
+function updateFeatureLockUI() {
+    // Apply visual locks to protected elements
+    const lockedElements = document.querySelectorAll('[data-protected=\
+true\]');
+    lockedElements.forEach(el => {
+        if (_featuresUnlocked) {
+            el.classList.remove('locked-feature');
+            el.removeAttribute('disabled');
+        } else {
+            el.classList.add('locked-feature');
+            el.setAttribute('disabled', 'true');
+        }
+    });
+}
+
+async function handleUnlockAttempt() {
+    const input = document.getElementById('feature-password-input');
+    const btn = document.getElementById('password-unlock-btn');
+    if (!input || !btn) return;
+
+    const password = input.value.trim();
+    if (!password) return;
+
+    btn.disabled = true;
+    btn.innerText = '...';
+
+    const result = await window.api.validateFeaturePassword(password);
+    if (result.success) {
+        _featuresUnlocked = true;
+        updateFeatureLockUI();
+        togglePasswordModal(false);
+        showToast('access_granted', {}, 4000);
+    } else {
+        showToast('access_denied', {}, 4000);
+        input.classList.add('animate-shake');
+        setTimeout(() => input.classList.remove('animate-shake'), 500);
+    }
+    btn.disabled = false;
+    btn.innerText = currentLang === 'ar' ? 'فتح الخصائص' : 'Unlock Features';
+    input.value = '';
+}
+
+function togglePasswordModal(show) {
+    const modal = document.getElementById('password-modal');
+    if (modal) modal.classList.toggle('hidden', !show);
+    if (show) document.getElementById('feature-password-input')?.focus();
+}
+
+// Attach Listeners
+document.getElementById('password-unlock-btn')?.addEventListener('click', handleUnlockAttempt);
+document.getElementById('password-cancel-btn')?.addEventListener('click', () => togglePasswordModal(false));
+document.getElementById('feature-password-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleUnlockAttempt();
+});
+
+// Call init on load
+initFeaturesLock();
+

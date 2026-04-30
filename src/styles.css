@@ -1416,3 +1416,12 @@ html.dark #pipeline-visualizer {
     border-color: var(--error) !important;
 }
 
+
+.animate-bounce-subtle {
+    animation: bounceSubtle 2s infinite ease-in-out;
+}
+
+@keyframes bounceSubtle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+}
