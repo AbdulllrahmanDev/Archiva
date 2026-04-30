@@ -36,8 +36,40 @@ if (!app.isPackaged) {
     });
 }
 
-// Disable the default menu bar
-Menu.setApplicationMenu(null);
+function setupAppMenu() {
+    const template = [
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo', label: 'تراجع', accelerator: 'CmdOrCtrl+Z' },
+                { role: 'redo', label: 'إعادة', accelerator: 'CmdOrCtrl+Y' },
+                { type: 'separator' },
+                { role: 'cut', label: 'قص', accelerator: 'CmdOrCtrl+X' },
+                { role: 'copy', label: 'نسخ', accelerator: 'CmdOrCtrl+C' },
+                { role: 'paste', label: 'لصق', accelerator: 'CmdOrCtrl+V' },
+                { role: 'selectall', label: 'تحديد الكل', accelerator: 'CmdOrCtrl+A' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload', label: 'إعادة تحميل', accelerator: 'CmdOrCtrl+R' },
+                { role: 'forceReload', label: 'إعادة تحميل إجباري', accelerator: 'CmdOrCtrl+Shift+R' },
+                { role: 'toggleDevTools', label: 'أدوات المطور', accelerator: 'F12' },
+                { type: 'separator' },
+                { role: 'resetZoom', label: 'إعادة ضبط الزوم', accelerator: 'CmdOrCtrl+0' },
+                { role: 'zoomIn', label: 'تكبير', accelerator: 'CmdOrCtrl+=' },
+                { role: 'zoomOut', label: 'تصغير', accelerator: 'CmdOrCtrl+-' },
+                { type: 'separator' },
+                { role: 'togglefullscreen', label: 'ملء الشاشة', accelerator: 'F11' }
+            ]
+        }
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
 const sqlite3 = require('sqlite3').verbose();
 
 let mainWindow;
@@ -213,6 +245,8 @@ function createWindow() {
     });
 
     mainWindow.loadFile(path.join(__dirname, 'src', 'index.html'));
+    mainWindow.setMenuBarVisibility(false); // Hide menu but keep shortcuts functional
+
     
     // Show window when renderer confirms readiness
     ipcMain.on('set-native-theme', (event, theme) => {
@@ -1618,5 +1652,6 @@ ipcMain.handle('validate-feature-password', (event, password) => {
 
 // Initialize on app start
 app.whenReady().then(() => {
+    setupAppMenu();
     setupAutoUpdater();
 });

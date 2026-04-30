@@ -422,57 +422,86 @@
         </div>
     </div>
 
-    <!-- Update Notification Modal (Premium Overhaul) -->
-    <div id="update-modal" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden opacity-0 transition-all duration-500">
-        <div class="w-full max-w-sm bg-surface-container-high border border-primary/20 rounded-[40px] p-10 shadow-2xl shadow-black/50 transform scale-90 transition-all duration-500 modal-content overflow-hidden relative">
-            <!-- Decorative Background Element -->
-            <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
-            
-            <div class="flex flex-col items-center text-center gap-8 relative z-10">
-                <div class="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center shadow-inner">
-                    <span class="material-symbols-outlined text-5xl text-primary animate-pulse">auto_renew</span>
-                </div>
-                
-                <div class="space-y-4 w-full">
-                    <div class="space-y-2">
-                        <h2 id="update-modal-title" class="text-2xl font-black text-on-surface tracking-tight"></h2>
-                        <p id="update-modal-message" class="text-xs text-on-surface-variant font-medium leading-relaxed"></p>
+    <!-- Premium Update Modal (Clean Solid Design) -->
+    <style>
+        .update-modal-content {
+            background-color: var(--surface-container-lowest);
+            border: 1px solid var(--outline-variant);
+            box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.3);
+        }
+        .update-progress-track {
+            height: 6px;
+            background: var(--surface-container-high);
+            border-radius: 99px;
+            overflow: hidden;
+            position: relative;
+        }
+        .update-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary) 0%, #3dd1ff 100%);
+            box-shadow: 0 0 10px var(--primary);
+            border-radius: 99px;
+            transition: width 0.4s cubic-bezier(0.2, 0, 0, 1);
+        }
+    </style>
+
+    <div id="update-modal" class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 hidden opacity-0 transition-all duration-500">
+        <div class="w-full max-w-md update-modal-content rounded-[40px] p-12 transform scale-95 transition-all duration-500 modal-content overflow-hidden relative">
+            <div class="flex flex-col items-center text-center relative z-10">
+                <!-- Icon -->
+                <div class="relative w-24 h-24 mb-8">
+                    <div class="absolute inset-0 bg-primary/5 rounded-full flex items-center justify-center border border-primary/10">
+                        <svg class="w-10 h-10 text-primary animate-[spin_6s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
+                            <polyline points="21 3 21 8 16 8"></polyline>
+                        </svg>
                     </div>
-                    
-                    <!-- Release Notes Section -->
-                    <div id="update-notes-wrapper" class="w-full bg-surface-container-highest/30 rounded-3xl p-5 border border-outline-variant/5 hidden">
-                        <div class="text-[9px] font-black uppercase tracking-widest text-primary mb-3 flex items-center gap-2">
-                            <span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                            <span>المميزات الجديدة</span>
+                </div>
+
+                <!-- Text Content -->
+                <div class="space-y-6 w-full mb-10">
+                    <div class="space-y-3">
+                        <h2 id="update-modal-title" class="text-3xl font-black text-on-surface tracking-tight"></h2>
+                        <p id="update-modal-message" class="text-[10px] text-on-surface-variant font-black uppercase tracking-widest opacity-40"></p>
+                    </div>
+
+                    <!-- Release Notes -->
+                    <div id="update-notes-wrapper" class="w-full bg-surface-container-low rounded-[24px] p-6 border border-outline-variant/10 hidden">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+                            <span class="text-[9px] font-black uppercase tracking-[0.25em] text-primary">${t('latest_status')}</span>
                         </div>
-                        <div id="update-modal-notes" class="text-[11px] text-on-surface-variant/80 font-bold leading-loose text-start max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
-                            <!-- Notes will be injected here -->
+                        <div id="update-modal-notes" class="text-[11px] text-on-surface/70 font-bold leading-loose text-start max-h-[140px] overflow-y-auto pr-3 custom-scrollbar">
+                            <!-- Notes -->
                         </div>
                     </div>
                 </div>
 
-                <!-- Update Progress Bar (Hidden by default) -->
-                <div id="update-progress-container" class="w-full space-y-3 hidden">
+                <!-- Progress Section -->
+                <div id="update-progress-container" class="w-full space-y-4 hidden">
                     <div class="flex justify-between items-center px-1">
-                        <span id="update-progress-label" class="text-[10px] font-black uppercase tracking-[0.2em] text-primary">جاري التحميل...</span>
-                        <span id="update-progress-percent" class="text-xs font-black text-on-surface-variant/40">0%</span>
+                        <span id="update-progress-label" class="text-[9px] font-black uppercase tracking-[0.3em] text-primary">Syncing...</span>
+                        <span id="update-progress-percent" class="text-[10px] font-black text-on-surface-variant/40 font-mono">0%</span>
                     </div>
-                    <div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden p-0.5">
-                        <div id="update-progress-bar" class="h-full bg-primary rounded-full transition-all duration-300 w-0"></div>
+                    <div class="update-progress-track">
+                        <div id="update-progress-bar" class="update-progress-fill w-0"></div>
                     </div>
                 </div>
 
-                <div id="update-modal-actions" class="flex gap-4 w-full pt-4">
-                    <button id="update-later-btn" class="flex-1 py-4 bg-surface-container-highest text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-surface-container-low hover:text-primary transition-all">
-                        لاحقاً
+                <!-- Action Buttons -->
+                <div id="update-modal-actions" class="flex gap-4 w-full">
+                    <button id="update-later-btn" class="flex-1 py-5 bg-surface-container-high text-on-surface-variant text-[10px] font-black uppercase tracking-[0.2em] rounded-[20px] hover:bg-surface-container-highest transition-all">
+                        Later
                     </button>
-                    <button id="update-now-btn" class="flex-[2] py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary/20">
-                        تحديث الآن
+                    <button id="update-now-btn" class="flex-[2] py-5 bg-primary text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-[20px] shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all">
+                        Update Now
                     </button>
                 </div>
             </div>
         </div>
     </div>
+
+
 
     <!-- Custom Confirmation Modal -->
     <div id="confirm-modal" class="fixed inset-0 z-[200] hidden flex items-center justify-center p-4">

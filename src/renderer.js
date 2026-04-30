@@ -3239,7 +3239,9 @@ if (window.api.onProjectSimilarityAsk) {
 // AUTO-UPDATE UI LOGIC (Premium Modal)
 // ============================================================
 
-function showUpdateModal(title, message, onConfirm, showProgress = false, notes = null) {
+let updateSnoozed = false;
+
+function showUpdateModal(title, message, onConfirm, showProgress = false, notes = null, isManual = false) {
     const modal = document.getElementById('update-modal');
     const titleEl = document.getElementById('update-modal-title');
     const msgEl = document.getElementById('update-modal-message');
@@ -3252,6 +3254,12 @@ function showUpdateModal(title, message, onConfirm, showProgress = false, notes 
     const content = modal.querySelector('.modal-content');
 
     if (!modal) return;
+
+    // If snoozed and this is an automatic trigger, don't show
+    if (updateSnoozed && !isManual && !showProgress) {
+        console.log("Update modal suppressed (snoozed)");
+        return;
+    }
 
     titleEl.innerText = title;
     msgEl.innerText = message;
@@ -3291,7 +3299,10 @@ function showUpdateModal(title, message, onConfirm, showProgress = false, notes 
         setTimeout(() => modal.classList.add('hidden'), 500);
     };
 
-    laterBtn.onclick = close;
+    laterBtn.onclick = () => {
+        updateSnoozed = true; // Dismiss for the rest of the session
+        close();
+    };
     nowBtn.onclick = () => {
         if (!showProgress) {
             close();
@@ -3302,12 +3313,14 @@ function showUpdateModal(title, message, onConfirm, showProgress = false, notes 
 
 if (window.api && window.api.onUpdateAvailable) {
     window.api.onUpdateAvailable((info) => {
-        showUpdateModal(
-            t('update_title'), 
-            t('update_available_msg'), 
-            () => {}, 
-            true
-        );
+        if (!updateSnoozed) {
+            showUpdateModal(
+                t('update_title'), 
+                t('update_available_msg'), 
+                () => {}, 
+                true
+            );
+        }
     });
 
     if (window.api.onUpdateProgress) {
@@ -3325,12 +3338,14 @@ if (window.api && window.api.onUpdateAvailable) {
     }
 
     window.api.onUpdateDownloaded(() => {
-        showUpdateModal(
-            t('update_title'), 
-            t('update_downloaded_msg'), 
-            () => window.api.restartApp(),
-            false
-        );
+        if (!updateSnoozed) {
+            showUpdateModal(
+                t('update_title'), 
+                t('update_downloaded_msg'), 
+                () => window.api.restartApp(),
+                false
+            );
+        }
     });
 }
 
@@ -3401,7 +3416,8 @@ async function handleManualUpdateCheck() {
             t('update_available_msg'), 
             () => {}, 
             true,
-            notes
+            notes,
+            true // isManual = true
         );
     }
 }
