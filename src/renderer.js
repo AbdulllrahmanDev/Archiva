@@ -20,6 +20,8 @@ let _autoAnalysisEnabled = false;
 let _smartProjectEnabled = false;
 let chatHistory = [];
 let pendingAttachments = [];
+let historyStack = [];
+const MAX_HISTORY = 50;
 
 const SVG_ICONS = {
     add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
@@ -2462,6 +2464,9 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         }
 
         try {
+            // Record history before update
+            pushToHistory({ id: docId, field: fieldKey, oldValue: currentValue });
+            
             const result = await window.api.updateDocument(docId, { [fieldKey]: newValue });
             if (result.success) {
                 // 1. تحديث المصفوفة المحلية فوراً
@@ -2503,10 +2508,8 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                     document.removeEventListener('click', inputEl._globalClickHandler);
                 }
 
-                // IMPORTANT: If path changed (e.g. date change), refresh the whole sidebar to update button handlers
-                if (result.newPath) {
-                    selectDocument(docId, true);
-                }
+                // IMPORTANT: Refresh the whole sidebar to update button handlers and context menu data
+                selectDocument(docId, true);
 
                 // 3. إعادة تحديث العرض الرئيسي لضمان ترتيب البيانات أو البحث
                 renderArchiveView(document.getElementById('global-search-input')?.value || '');
@@ -3362,3 +3365,62 @@ if (window.api && window.api.sendReady) {
         window.api.sendReady();
     }, 250);
 }
+
+// --- Keyboard Shortcuts & History Logic ---
+function pushToHistory(action) {
+    historyStack.push(action);
+    if (historyStack.length > MAX_HISTORY) historyStack.shift();
+}
+
+async function undoAction() {
+    if (historyStack.length === 0) {
+        showToast(currentLang === 'ar' ? 'لا يوجد شيء للتراجع عنه' : 'Nothing to undo');
+        return;
+    }
+
+    const lastAction = historyStack.pop();
+    try {
+        const result = await window.api.updateDocument(lastAction.id, { [lastAction.field]: lastAction.oldValue });
+        if (result.success) {
+            const docIndex = documents.findIndex(d => d.id == lastAction.id);
+            if (docIndex !== -1) {
+                documents[docIndex][lastAction.field] = lastAction.oldValue;
+            }
+            renderArchiveView(document.getElementById('global-search-input')?.value || '');
+            if (activeDocId == lastAction.id) {
+                selectDocument(lastAction.id, true);
+            }
+            showToast(currentLang === 'ar' ? 'تم التراجع عن التعديل' : 'Edit undone');
+        }
+    } catch (e) {
+        console.error('Undo failed:', e);
+    }
+}
+
+function selectAllDocuments() {
+    if (documents.length === 0) return;
+    isSelectionMode = true;
+    selectedDocIds.clear();
+    documents.forEach(doc => selectedDocIds.add(doc.id.toString()));
+    renderArchiveView(document.getElementById('global-search-input')?.value || '');
+    showToast(currentLang === 'ar' ? `تم تحديد ${documents.length} ملف` : `Selected ${documents.length} files`);
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        return;
+    }
+
+    const key = e.key.toLowerCase();
+    if (e.ctrlKey && key === 'a') {
+        if (currentView === 'archive') {
+            e.preventDefault();
+            selectAllDocuments();
+        }
+    }
+
+    if (e.ctrlKey && key === 'z') {
+        e.preventDefault();
+        undoAction();
+    }
+});

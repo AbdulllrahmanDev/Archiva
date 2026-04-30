@@ -133,7 +133,8 @@ function initStorage() {
                 const migrationCols = ['file TEXT', 'class TEXT', 'area TEXT', 'tags TEXT',
                                        'summary TEXT', 'content TEXT', 'sha256 TEXT',
                                        'status TEXT DEFAULT \'ready\'',
-                                       'subject TEXT', 'project TEXT', 'doc_date TEXT', 'version_no TEXT', 'intel_card TEXT'];
+                                       'subject TEXT', 'project TEXT', 'doc_date TEXT', 'version_no TEXT', 'intel_card TEXT',
+                                       'is_manual INTEGER DEFAULT 0', 'governorate TEXT'];
                 migrationCols.forEach(colDef => {
                     const colName = colDef.split(' ')[0];
                     db.run(`ALTER TABLE documents ADD COLUMN ${colDef}`, (err) => {
@@ -440,8 +441,8 @@ ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => 
                 // Insert DB record with 'processing' status
                 await new Promise((resolve, reject) => {
                     db.run(
-                        `INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing'],
+                        `INSERT OR REPLACE INTO documents (id, file, file_path, title, date_added, type, status, is_manual) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [fileId, file.name, destPath, file.name.split('.')[0], dateStr, type, 'processing', manualSplit ? 1 : 0],
                         (err) => {
                             if (err) {
                                 console.error(`[DB] Insert error for ${file.name}:`, err);
@@ -652,7 +653,7 @@ ipcMain.handle('update-document', async (event, id, fields) => {
             }
             if (fields.governorate !== undefined && fields.governorate !== doc.governorate) needsReorganize = true;
             
-            const updatedDoc = { ...doc, ...fields };
+            const updatedDoc = { ...doc, ...fields, is_manual: 1 };
             
             if (needsReorganize) {
                 // Call the new centralized move logic
@@ -660,8 +661,10 @@ ipcMain.handle('update-document', async (event, id, fields) => {
                 resolve(result);
             } else {
                 // Just update DB fields
-                const setClauses = updates.map(([k]) => `${k} = ?`).join(', ');
-                const values = [...updates.map(([, v]) => v), id];
+                const fieldsToUpdate = { ...fields, is_manual: 1 };
+                const updatesWithManual = Object.entries(fieldsToUpdate);
+                const setClauses = updatesWithManual.map(([k]) => `${k} = ?`).join(', ');
+                const values = [...updatesWithManual.map(([, v]) => v), id];
                 db.run(`UPDATE documents SET ${setClauses} WHERE id = ?`, values, (err) => {
                     if (err) {
                         console.error('Update doc error:', err);
@@ -860,9 +863,9 @@ async function organizeFileAndSaveDb(docData, baseFolder) {
         
         db.run(
             `INSERT OR REPLACE INTO documents 
-            (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, intel_card, subject, project, doc_date, version_no, governorate) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [docData.id, docData.file, docData.file_path, docData.title, docData.date_added, docData.type, docData.class, docData.area, tagsJson, docData.summary, docData.content || "", docData.sha256 || "", 'ready', docData.intel_card || "", docData.subject, docData.project, docData.doc_date, docData.version_no, docData.governorate || ""],
+            (id, file, file_path, title, date_added, type, class, area, tags, summary, content, sha256, status, intel_card, subject, project, doc_date, version_no, governorate, is_manual) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [docData.id, docData.file, docData.file_path, docData.title, docData.date_added, docData.type, docData.class, docData.area, tagsJson, docData.summary, docData.content || "", docData.sha256 || "", 'ready', docData.intel_card || "", docData.subject, docData.project, docData.doc_date, docData.version_no, docData.governorate || "", docData.is_manual || 0],
             (err) => {
                 if (err) console.error("DB Insert error:", err);
                 sendUpdateToRenderer();
@@ -918,20 +921,20 @@ ipcMain.handle('stop-backend', async () => {
         }
         activeProcesses.clear();
 
-        // 3. Get all 'processing' docs BEFORE deleting from DB
+        // 3. Get all 'processing' docs that ARE NOT manual (temporary background files)
         const processingDocs = await new Promise((resolve) => {
-            db.all('SELECT id, file_path, file FROM documents WHERE status = ?', ['processing'], (err, rows) => {
+            db.all('SELECT id, file_path, file FROM documents WHERE status = ? AND is_manual = 0', ['processing'], (err, rows) => {
                 resolve(rows || []);
             });
         });
 
-        // 4. Delete the actual files from watchFolder (they haven't been organized yet)
+        // 4. Delete the actual files from watchFolder (only if they are in root and NOT manual)
         for (const doc of processingDocs) {
             const fileInWatch = path.join(watchFolder, doc.file);
             if (fs.existsSync(fileInWatch)) {
                 try {
                     fs.unlinkSync(fileInWatch);
-                    console.log(`[FORCE STOP] Deleted pending file: ${fileInWatch}`);
+                    console.log(`[FORCE STOP] Deleted temporary file: ${fileInWatch}`);
                 } catch(e) {
                     console.error(`[FORCE STOP] Could not delete ${fileInWatch}:`, e);
                 }
@@ -943,11 +946,14 @@ ipcMain.handle('stop-backend', async () => {
             }
         }
 
-        // 5. Delete all 'processing' records from DB
+        // 5. Delete all 'processing' records from DB, EXCLUDING manual ones
         await new Promise((resolve) => {
-            db.run('DELETE FROM documents WHERE status = ?', ['processing'], () => {
-                sendUpdateToRenderer();
-                resolve();
+            db.run('DELETE FROM documents WHERE status = ? AND is_manual = 0', ['processing'], () => {
+                // For manual docs that were 'processing', reset them to 'ready' instead of deleting
+                db.run("UPDATE documents SET status = 'ready' WHERE status = 'processing' AND is_manual = 1", () => {
+                    sendUpdateToRenderer();
+                    resolve();
+                });
             });
         });
 
