@@ -258,30 +258,8 @@
             <div id="pipeline-overall-percent" class="text-xs font-black text-on-surface-variant/40 tracking-tighter"></div>
         </div>
         
-        <div class="pipeline-step" id="step-upload">
-            <div class="step-icon-wrapper"></div>
-            <div class="step-label"></div>
-        </div>
-        <div class="pipeline-connector" id="conn-1">
-            <div class="connector-fill"></div>
-        </div>
-        <div class="pipeline-step" id="step-analyze">
-            <div class="step-icon-wrapper"></div>
-            <div class="step-label"></div>
-        </div>
-        <div class="pipeline-connector" id="conn-2">
-            <div class="connector-fill"></div>
-        </div>
-        <div class="pipeline-step" id="step-organize">
-            <div class="step-icon-wrapper"></div>
-            <div class="step-label"></div>
-        </div>
-        <div class="pipeline-connector" id="conn-3">
-            <div class="connector-fill"></div>
-        </div>
-        <div class="pipeline-step final" id="step-ready">
-            <div class="step-icon-wrapper"></div>
-            <div class="step-label"></div>
+        <div id="pipeline-steps-container" class="flex items-center gap-0">
+            <!-- Steps will be injected dynamically by renderer.js -->
         </div>
         
         <!-- Force Stop Button -->
@@ -507,6 +485,38 @@
         </div>
     </div>
 
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-[1000] hidden flex flex-col p-4 md:p-12 animate-fade-in overflow-hidden">
+        <div id="preview-backdrop" class="absolute inset-0 bg-black/80 backdrop-blur-xl"></div>
+        
+        <!-- Preview Header -->
+        <div class="relative z-10 flex items-center justify-between mb-6 px-4">
+            <div class="flex flex-col">
+                <h3 id="preview-filename" class="text-white font-headline font-black text-lg tracking-tight truncate max-w-[300px]">Filename.pdf</h3>
+                <span id="preview-type" class="text-white/40 text-[10px] font-black uppercase tracking-widest">Document Preview</span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <button id="preview-external-btn" class="w-12 h-12 bg-white/5 hover:bg-white/10 text-white rounded-full flex items-center justify-center transition-all group" title="Open in System">
+                    <svg class="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"></path></svg>
+                </button>
+                <button id="preview-close-btn" class="w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center shadow-xl shadow-primary/20 hover:brightness-110 active:scale-95 transition-all">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Preview Body -->
+        <div class="relative z-10 flex-1 bg-surface-container-lowest/10 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl flex items-center justify-center">
+            <div id="preview-loading" class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/20">
+                <div class="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                <span class="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">تحميل المعاينة...</span>
+            </div>
+            <iframe id="preview-frame" class="w-full h-full border-none hidden" src=""></iframe>
+            <img id="preview-img" class="max-w-full max-h-full object-contain hidden" src="">
+        </div>
+    </div>
 
     <!-- Scroll to Top Button -->
     <button id="scroll-to-top-btn" class="fixed bottom-8 right-8 z-[150] w-12 h-12 rounded-full bg-[#1A73E8] dark:bg-primary-container text-white dark:text-primary shadow-lg shadow-black/20 dark:shadow-black/40 flex items-center justify-center transition-all duration-300 opacity-0 translate-y-8 pointer-events-none hover:scale-110 active:scale-95" type="button" title="Back to Top">

@@ -15,7 +15,11 @@ let isSelectionMode = false;
 let activeFilters = { type: [], class: [], area: [], year: [], project: [], recency: false };
 
 let viewsInitialized = false;
-let activeDocId = null; // Track currently open doc in rail
+let activeDocId = null; 
+let _autoAnalysisEnabled = false;
+let _smartProjectEnabled = false;
+let chatHistory = [];
+let pendingAttachments = [];
 
 const SVG_ICONS = {
     add: 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
@@ -77,8 +81,12 @@ function showToast(key, data = {}, duration = 3000) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    // Remove existing toasts to prevent stacking as per user request
+    container.innerHTML = '';
+
     const toast = document.createElement('div');
-    toast.className = 'px-8 py-4 bg-on-surface text-background rounded-2xl shadow-2xl text-xs font-bold uppercase tracking-wider animate-scale-up border border-white/5';
+    // Added text-center for alignment
+    toast.className = 'px-8 py-4 bg-on-surface text-background rounded-2xl shadow-2xl text-xs font-bold uppercase tracking-wider animate-scale-up border border-white/5 text-center';
     toast.innerText = t(key, data);
     
     container.appendChild(toast);
@@ -164,6 +172,7 @@ const i18n = {
         pdf_split_enabled_toast: "PDF Splitting enabled.",
         pdf_split_disabled_toast: "PDF Splitting disabled.",
         step_upload: "Upload",
+        step_split: "PDF Splitting",
         step_analyze: "AI Analysis",
         step_organize: "Organize",
         step_ready: "Ready",
@@ -245,6 +254,7 @@ const i18n = {
         today: "اليوم",
         yesterday: "أمس",
         step_upload: "رفع الملف",
+        step_split: "فصل الملفات",
         step_analyze: "التحليل الذكي",
         step_organize: "التنظيم",
         step_ready: "جاهز",
@@ -294,7 +304,8 @@ const i18n = {
 let currentLang = localStorage.getItem('archiva-lang') || 'ar';
 let currentTheme = localStorage.getItem('archiva-theme') || 'light';
 let selectedDocIds = new Set();
-let isFeaturesUnlocked = localStorage.getItem('archiva-features-unlocked') === 'true';
+let isFeaturesUnlocked = true; // Always unlocked as per user request
+
 const FEATURE_PASSWORD = "Archiva2026";
 
 function setTheme(theme) {
@@ -348,8 +359,18 @@ function updateSettingsUI() {
     if (smartProjectLabel) smartProjectLabel.innerText = t('smart_project_label');
     if (smartProjectDesc) smartProjectDesc.innerText = t('smart_project_desc');
 
+    const pdfSplitLabel = document.getElementById('pdf-split-label');
+    const pdfSplitDesc = document.getElementById('pdf-split-desc');
+    if (pdfSplitLabel) pdfSplitLabel.innerText = t('pdf_split_label');
+    if (pdfSplitDesc) pdfSplitDesc.innerText = t('pdf_split_desc');
+
     const stopLabel = document.getElementById('stop-label');
     if (stopLabel) stopLabel.innerText = t('stop_label');
+
+    const manualUpdateBtnText = document.getElementById('update-version-text');
+    if (manualUpdateBtnText && !manualUpdateBtnText.innerText.includes('v')) {
+        manualUpdateBtnText.innerText = t('latest_status');
+    }
 
     refreshStorageDisplay();
     updateSegmentedIndicators();
@@ -572,6 +593,24 @@ const getViews = () => ({
                 </div>
             </div>
         </div>
+    `,
+    settings: `
+        <div class="max-w-4xl mx-auto px-6 py-20 animate-fade-in flex flex-col items-center justify-center text-center space-y-6">
+            <div class="w-24 h-24 bg-primary/10 text-primary rounded-[2rem] flex items-center justify-center shadow-inner">
+                ${getIcon('settings', 'xl')}
+            </div>
+            <div class="space-y-2">
+                <h1 class="text-3xl font-black text-on-surface tracking-tight">${t('settings_title')}</h1>
+                <p class="text-on-surface-variant/60 max-w-sm mx-auto leading-relaxed">
+                    ${currentLang === 'ar' 
+                        ? 'يرجى استخدام قائمة الإعدادات العلوية للوصول إلى كافة الخيارات المتقدمة وتخصيص تجربتك.' 
+                        : 'Please use the settings menu in the header to access advanced options and customize your experience.'}
+                </p>
+            </div>
+            <button onclick="toggleSettingsModal(true)" class="mt-4 px-8 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all flex items-center gap-3">
+                ${getIcon('tune', 'sm')} ${t('settings_title')}
+            </button>
+        </div>
     `
 });
 
@@ -601,10 +640,7 @@ function updateLayoutDirection() {
 
     viewsInitialized = false;
     // Security check: If starting on AI view but locked, redirect to add
-    if (currentView === 'ai' && !isFeaturesUnlocked) {
-        currentView = 'add';
-        localStorage.setItem('archiva-last-view', 'add');
-    }
+
     switchView(currentView);
     moveNavIndicator(currentView);
     updatePipelineUI();
@@ -675,7 +711,8 @@ function confirmAction(titleKey, msgKey, type = 'error', customMsg = null, custo
 
 function requestFeatureUnlock() {
     return new Promise((resolve) => {
-        if (isFeaturesUnlocked) return resolve(true);
+        return resolve(true); // Always unlocked
+
 
         const modal = document.getElementById('password-modal');
         const title = document.getElementById('password-title');
@@ -739,8 +776,6 @@ function moveNavIndicator(viewName) {
     }
 }
 // --- Chat Logic ---
-let chatHistory = [];
-let pendingAttachments = [];
 
 function setupChatUI() {
     const chatMessages = document.getElementById('chat-messages');
@@ -1582,10 +1617,10 @@ function renderGridCard(doc) {
                     <input type="checkbox" class="w-5 h-5 rounded border-outline-variant/30 text-primary focus:ring-primary pointer-events-none" ${isSelected ? 'checked' : ''}>
                 </div>
             ` : ''}
-            <div class="card-preview">
+            <div class="card-preview" onclick="event.stopPropagation(); openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')">
                 <div class="card-preview-gradient"></div>
 
-                <div class="text-[1.75rem] font-black text-on-surface-variant/10 tracking-tighter uppercase select-none"></div>
+                <div class="text-[1.75rem] font-black text-on-surface-variant/10 tracking-tighter uppercase select-none">${doc.type}</div>
                     <!-- Format tag hidden as the central text now represents it -->
                 ${!isSelectionMode ? `
                     <div class="absolute top-4 right-4 z-20">
@@ -1668,7 +1703,7 @@ function renderListRow(doc) {
                 ${isSelectionMode ? `
                     <input type="checkbox" class="w-5 h-5 rounded border-outline-variant/30 text-primary focus:ring-primary pointer-events-none" ${isSelected ? 'checked' : ''}>
                 ` : ''}
-                <div class="w-12 h-12 flex-shrink-0 bg-surface-container-highest rounded-xl flex items-center justify-center relative overflow-hidden border border-outline-variant/10 shadow-sm">
+                <div class="w-12 h-12 flex-shrink-0 bg-surface-container-highest rounded-xl flex items-center justify-center relative overflow-hidden border border-outline-variant/10 shadow-sm hover:border-primary/40 transition-all active:scale-95" onclick="event.stopPropagation(); openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')" title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
                     <div class="text-[9px] font-black text-on-surface-variant/40 uppercase tracking-tighter select-none">${doc.type}</div>
                 </div>
                 <div>
@@ -1731,8 +1766,7 @@ function enterStagingState() {
         forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
         forceToggle.onclick = async (e) => {
             e.stopPropagation();
-            if (!(await requestFeatureUnlock())) return;
-            
+
             forceAiForNextUpload = !forceAiForNextUpload;
             if (forceAiForNextUpload) {
                 forceToggle.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
@@ -1741,6 +1775,7 @@ function enterStagingState() {
                 forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
                 forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
             }
+            updatePipelineUI();
         };
     }
 
@@ -1748,9 +1783,12 @@ function enterStagingState() {
     if (splitToggle) {
         splitToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
         splitToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
-        splitToggle.onclick = (e) => {
+        splitToggle.onclick = async (e) => {
             e.stopPropagation();
-            // NO PASSWORD REQUIRED for splitting as requested
+            // Password protection removed as per user request
+            // if (!(await requestFeatureUnlock())) return;
+
+
             manualSplitForNextUpload = !manualSplitForNextUpload;
             if (manualSplitForNextUpload) {
                 splitToggle.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
@@ -1759,6 +1797,7 @@ function enterStagingState() {
                 splitToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
                 splitToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
             }
+            updatePipelineUI();
         };
     }
 
@@ -1774,10 +1813,8 @@ function enterStagingState() {
 function resetAddView() {
     pendingFiles = [];
 
-    // Remove any loading state first (btn-loading class, disabled buttons)
     resetLoadingState();
 
-    // Reset staging UI in-place without re-rendering the entire view
     const wrapper = document.getElementById('upload-wrapper');
     const stagingArea = document.getElementById('staging-area');
     const heroHeader = document.getElementById('hero-header');
@@ -1795,14 +1832,11 @@ function resetAddView() {
         heroHeader.style.marginBottom = '';
     }
     if (hint) hint.style.opacity = '';
-    // Icon back to the '+' symbol
     if (iconWrapper) iconWrapper.innerHTML = getIcon('add', 'xl');
     if (pendingList) pendingList.innerHTML = '';
-    // Re-enable action buttons (in case they were disabled during upload)
     if (confirmBtn) confirmBtn.disabled = false;
     if (cancelBtn) cancelBtn.disabled = false;
 
-    // Re-bind the upload button
     const upBtn = document.getElementById('main-upload-btn');
     if (upBtn) {
         upBtn.classList.remove('btn-loading');
@@ -1841,12 +1875,9 @@ async function confirmUploads() {
         console.log("Backend process-uploads result:", result);
 
         if (result && result.success) {
-            // Removed showToast("staged_msg") as per user request
             
-            // Reset the add view cleanly — shows '+' button again
             resetAddView();
             
-            // Show the 'View Library' shortcut in the toast (if any container exists)
             const statusActions = document.getElementById('status-actions');
             if (statusActions) statusActions.classList.remove('hidden');
         } else {
@@ -1886,7 +1917,7 @@ function renderPendingList() {
         return `
             <div class="px-8 py-4 flex items-center justify-between group">
                 <div class="flex items-center gap-4">
-                    <div class="text-primary opacity-40">
+                    <div class="text-primary opacity-40 hover:opacity-100 cursor-pointer transition-all active:scale-95" onclick="openPreview('${file.path.replace(/\\/g, '\\\\')}', '${ext}', '${file.name.replace(/'/g, "\\'")}')" title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
                         ${getIcon(icon)}
                     </div>
                     <div>
@@ -2604,20 +2635,29 @@ if (window.api) {
 
     function updatePipelineStatus(msgKey) {
         const pipeline = document.getElementById('pipeline-visualizer');
+        const isAiActive = forceAiForNextUpload || _autoAnalysisEnabled;
+        const isSplitActive = manualSplitForNextUpload;
         
         // Step 1: Upload / Extracting
         if (msgKey === 'archiving_msg' || msgKey === 'status_extracting' || msgKey === 'status_ocr') {
             setStepActive('step-upload');
         } 
-        // Step 2: AI Analysis
+        // Step: PDF Splitting
+        else if (msgKey === 'status_splitting') {
+            setStepCompleted('step-upload', 'conn-upload');
+            setStepActive('step-split');
+        }
+        // Step: AI Analysis
         else if (msgKey === 'status_ai') {
-            setStepCompleted('step-upload', 'conn-1');
+            setStepCompleted('step-upload', 'conn-upload');
+            if (isSplitActive) setStepCompleted('step-split', 'conn-split');
             setStepActive('step-analyze');
         }
         // Step 3: Organizing / Saving
         else if (msgKey === 'status_organizing' || msgKey === 'status_saving') {
-            setStepCompleted('step-upload', 'conn-1');
-            setStepCompleted('step-analyze', 'conn-2');
+            setStepCompleted('step-upload', 'conn-upload');
+            if (isSplitActive) setStepCompleted('step-split', 'conn-split');
+            if (isAiActive) setStepCompleted('step-analyze', 'conn-analyze');
             setStepActive('step-organize');
         }
     }
@@ -2711,9 +2751,7 @@ if (window.api) {
 document.getElementById('nav-add').onclick = () => switchView('add');
 document.getElementById('nav-archive').onclick = () => switchView('archive');
 document.getElementById('nav-ai').onclick = async () => {
-    if (await requestFeatureUnlock()) {
-        switchView('ai');
-    }
+    switchView('ai');
 };
 
 const toastViewBtn = document.getElementById('toast-view-btn');
@@ -2764,7 +2802,8 @@ setTheme(currentTheme);
 const closeRail = document.getElementById('close-rail');
 if (closeRail && insightRail) closeRail.onclick = () => insightRail.classList.add('translate-x-full');
 
-updateLayoutDirection();
+// Initialized at bottom
+
 console.log("Archiva Intelligence Engine Initialized.");
 
 document.addEventListener('click', (e) => {
@@ -2777,18 +2816,13 @@ document.addEventListener('click', (e) => {
     }
 });
 
-if (window.api && window.api.sendReady) {
-    setTimeout(() => {
-        document.body.classList.remove('loading');
-        window.api.sendReady();
-    }, 250);
-}
+// sendReady moved to bottom
 
 // ============================================================
 // AUTO-ANALYSIS TOGGLE LOGIC
 // ============================================================
 
-let _autoAnalysisEnabled = false; // local state mirror
+// moved to top
 
 function setAutoAnalysisUI(enabled, activatedAt) {
     _autoAnalysisEnabled = enabled;
@@ -2842,7 +2876,6 @@ async function initAutoAnalysisToggle() {
 const autoAnalysisToggleBtn = document.getElementById('auto-analysis-toggle');
 if (autoAnalysisToggleBtn) {
     autoAnalysisToggleBtn.addEventListener('click', async () => {
-        if (!(await requestFeatureUnlock())) return;
 
         const nextState = !_autoAnalysisEnabled;
 
@@ -2888,7 +2921,7 @@ initAutoAnalysisToggle();
 // SMART PROJECT MATCHING TOGGLE LOGIC
 // ============================================================
 
-let _smartProjectEnabled = false;
+// moved to top
 
 function setSmartProjectUI(enabled) {
     _smartProjectEnabled = enabled;
@@ -2914,6 +2947,7 @@ async function initSmartProjectToggle() {
 const smartProjectToggleBtn = document.getElementById('smart-project-toggle');
 if (smartProjectToggleBtn) {
     smartProjectToggleBtn.addEventListener('click', async () => {
+
         const nextState = !_smartProjectEnabled;
         setSmartProjectUI(nextState);
 
@@ -2992,16 +3026,36 @@ if (scrollToTopBtn) {
 }
 
 function updatePipelineUI() {
-    const steps = ['upload', 'analyze', 'organize', 'ready'];
-    steps.forEach(s => {
-        const el = document.getElementById(`step-${s}`);
-        if (el) {
-            const label = el.querySelector('.step-label');
-            const icon = el.querySelector('.step-icon-wrapper');
-            if (label) label.innerText = t(`step_${s}`);
-            if (icon) icon.innerHTML = getIcon(s === 'upload' ? 'cloud_upload' : (s === 'analyze' ? 'auto_awesome' : (s === 'organize' ? 'folder_managed' : 'task_alt')));
+    const container = document.getElementById('pipeline-steps-container');
+    if (!container) return;
+
+    const isAiActive = forceAiForNextUpload || _autoAnalysisEnabled;
+    const isSplitActive = manualSplitForNextUpload;
+
+    const steps = [];
+    steps.push({ id: 'upload', icon: 'cloud_upload' });
+    if (isSplitActive) steps.push({ id: 'split', icon: 'pdf' });
+    if (isAiActive) steps.push({ id: 'analyze', icon: 'auto_awesome' });
+    steps.push({ id: 'organize', icon: 'folder_managed' });
+    steps.push({ id: 'ready', icon: 'task_alt', final: true });
+
+    let html = '';
+    steps.forEach((s, idx) => {
+        html += `
+            <div class="pipeline-step ${s.final ? 'final' : ''}" id="step-${s.id}">
+                <div class="step-icon-wrapper">${getIcon(s.icon)}</div>
+                <div class="step-label">${t(`step_${s.id}`)}</div>
+            </div>
+        `;
+        if (idx < steps.length - 1) {
+            html += `
+                <div class="pipeline-connector" id="conn-${s.id}">
+                    <div class="connector-fill"></div>
+                </div>
+            `;
         }
     });
+    container.innerHTML = html;
 }
 
 // Handle Project Similarity Confirmation
@@ -3052,9 +3106,6 @@ if (window.api.onProjectSimilarityAsk) {
     });
 }
 
-// Final Initialization
-updateLayoutDirection();
-updatePipelineUI();
 // ============================================================
 // AUTO-UPDATE UI LOGIC (Premium Modal)
 // ============================================================
@@ -3196,3 +3247,80 @@ setTimeout(() => syncUpdateStatus(true), 2000);
 document.getElementById('settings-open-btn')?.addEventListener('click', () => {
     syncUpdateStatus(true);
 });
+
+
+// ============================================================
+// PREVIEW MODAL LOGIC
+// ============================================================
+
+async function openPreview(filePath, type, title) {
+    const modal = document.getElementById('preview-modal');
+    const frame = document.getElementById('preview-frame');
+    const img = document.getElementById('preview-img');
+    const loading = document.getElementById('preview-loading');
+    const filenameEl = document.getElementById('preview-filename');
+    const externalBtn = document.getElementById('preview-external-btn');
+
+    if (!modal || !frame || !img || !loading) return;
+
+    filenameEl.innerText = title || filePath.split(/[\\/]/).pop();
+    modal.classList.remove('hidden');
+    loading.classList.remove('hidden');
+    frame.classList.add('hidden');
+    img.classList.add('hidden');
+    frame.src = '';
+    img.src = '';
+
+    externalBtn.onclick = () => window.api.openPath(filePath);
+
+    try {
+        const dataUri = await window.api.getFileData(filePath);
+        if (!dataUri) {
+            showToast("Failed to load file preview.");
+            modal.classList.add('hidden');
+            return;
+        }
+
+        const isPdf = (type && type.toLowerCase() === 'pdf') || filePath.toLowerCase().endsWith('.pdf');
+
+        if (isPdf) {
+            frame.src = dataUri;
+            frame.classList.remove('hidden');
+        } else {
+            img.src = dataUri;
+            img.classList.remove('hidden');
+        }
+        loading.classList.add('hidden');
+    } catch (e) {
+        console.error('Preview error:', e);
+        showToast("Error loading preview.");
+        modal.classList.add('hidden');
+    }
+}
+
+function closePreview() {
+    const modal = document.getElementById('preview-modal');
+    const frame = document.getElementById('preview-frame');
+    const img = document.getElementById('preview-img');
+    if (modal) modal.classList.add('hidden');
+    if (frame) frame.src = '';
+    if (img) img.src = '';
+}
+
+document.getElementById('preview-close-btn')?.addEventListener('click', closePreview);
+document.getElementById('preview-backdrop')?.addEventListener('click', closePreview);
+
+// ============================================================
+// FINAL INITIALIZATION
+// ============================================================
+
+setTheme(currentTheme);
+updateLayoutDirection();
+updatePipelineUI();
+
+if (window.api && window.api.sendReady) {
+    setTimeout(() => {
+        document.body.classList.remove('loading');
+        window.api.sendReady();
+    }, 250);
+}

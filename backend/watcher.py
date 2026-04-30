@@ -407,8 +407,14 @@ if __name__ == '__main__':
                 # Setup DB and process
                 set_db_path(watch_folder)
                 try:
-                    # Use skip_ai_flag if provided
-                    process_file(file_to_process, watch_folder, skip_ai=skip_ai_flag, force_reprocess=True, doc_id=passed_id)
+                    # Determine split setting: explicit flags > sentinel > env
+                    split_pdf = _read_sentinel_split_enabled()
+                    if "--split" in sys.argv:
+                        split_pdf = True
+                    elif "--no-split" in sys.argv:
+                        split_pdf = False
+                        
+                    process_file(file_to_process, watch_folder, skip_ai=skip_ai_flag, force_reprocess=True, doc_id=passed_id, split_pdf=split_pdf)
                 except Exception as e:
                     print(f"Manual Processing error: {e}", flush=True)
             else:

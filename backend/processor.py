@@ -929,14 +929,27 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
             report_status("status_idle", 100, doc_id=file_id)
             return None
 
-    # 3. PDF Splitting Logic
+    # 3. PDF Splitting Logic (Dumb Split: Page-by-Page)
     if ext == ".pdf" and split_pdf:
-        print(f"Checking if PDF needs splitting: {file_name}", flush=True)
-        report_status("status_split_check", 5, doc_id=doc_id, extra={"file": file_name})
-        split_data = ai_detect_pdf_splits(file_path, file_name)
+        print(f"Splitting PDF page-by-page: {file_name}", flush=True)
+        report_status("status_splitting", 10, doc_id=doc_id)
+        
+        # Prepare split data for every single page
+        split_data = []
+        try:
+            doc = fitz.open(file_path)
+            num_pages = len(doc)
+            for i in range(num_pages):
+                split_data.append({
+                    "subject": f"{os.path.splitext(file_name)[0]}_صفحة_{i+1}",
+                    "pages": [i+1]
+                })
+            doc.close()
+        except Exception as e:
+            print(f"Error opening PDF for page split: {e}", flush=True)
+            split_data = []
+
         if split_data and len(split_data) > 1:
-            print(f"AI detected {len(split_data)} documents in PDF. Splitting...", flush=True)
-            report_status("status_splitting", 10, doc_id=doc_id)
             parts = split_pdf_file(file_path, split_data)
             if parts:
                 # Move original to .original folder to avoid reprocessing and keep it safe
@@ -956,10 +969,10 @@ def process_file(file_path, output_folder, skip_ai=False, force_reprocess=False,
                     print(f"Deleting original record for split file: {doc_id}", flush=True)
                     delete_document(doc_id)
 
-                # Process each part individually
+                # Process each part individually WITHOUT AI (as requested for split files)
                 for part in parts:
                     print(f"Analyzing split part: {os.path.basename(part)}", flush=True)
-                    process_file(part, output_folder, skip_ai=skip_ai, force_reprocess=force_reprocess, split_pdf=False, smart_match=smart_match)
+                    process_file(part, output_folder, skip_ai=True, force_reprocess=force_reprocess, split_pdf=False, smart_match=smart_match)
                 
                 report_status("status_idle", 100)
                 return None # Finished processing parts
@@ -1149,6 +1162,7 @@ if __name__ == "__main__":
         set_db_path(output_folder_arg)
         try:
             # Force AI explicitly since this is a manual CLI invocation
-            process_file(file_path_arg, output_folder_arg, skip_ai=False, force_reprocess=True, doc_id=passed_id)
+            split_pdf = os.environ.get('PDF_SPLIT_ENABLED', '0') == '1'
+            process_file(file_path_arg, output_folder_arg, skip_ai=False, force_reprocess=True, doc_id=passed_id, split_pdf=split_pdf)
         except Exception as e:
             print(f"CLI Processing error: {e}", flush=True)

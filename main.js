@@ -76,7 +76,7 @@ function loadAutoAnalysisConfig() {
     }
 
     autoAnalysisActivatedAt = config.autoAnalysisActivatedAt || null;
-    pdfSplitEnabled = config.pdfSplitEnabled !== false; // Default true
+    pdfSplitEnabled = config.pdfSplitEnabled === true; // Default false to prevent automatic background splitting
     smartProjectMatchingEnabled = config.smartProjectMatchingEnabled !== false; // Default true
     console.log(`Auto-Analysis: ${autoAnalysisEnabled ? 'ENABLED' : 'DISABLED'}, ActivatedAt: ${autoAnalysisActivatedAt || 'N/A'}`);
     console.log(`PDF Splitting: ${pdfSplitEnabled ? 'ENABLED' : 'DISABLED'}`);
@@ -466,9 +466,14 @@ ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => 
                     args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', destPath, watchFolder, '--id', fileId];
                 }
 
-                // Respect the auto-analysis toggle
-                if (!autoAnalysisEnabled) {
+                // Respect the auto-analysis and PDF split toggles
+                if (!autoAnalysisEnabled && !forceAi) {
                     args.push('--skip-ai');
+                }
+                if (manualSplit) {
+                    args.push('--split');
+                } else {
+                    args.push('--no-split');
                 }
 
                 const pyProcess = spawn(executable, args, {
@@ -478,8 +483,7 @@ ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => 
                         PYTHONUTF8: '1',
                         OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
                         AI_MODEL: process.env.AI_MODEL || 'google/gemini-2.5-flash-lite',
-                        SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0',
-                        PDF_SPLIT_ENABLED: manualSplit ? '1' : '0'
+                        SMART_PROJECT_MATCHING: smartProjectMatchingEnabled ? '1' : '0'
                     }
                 });
 
@@ -534,6 +538,23 @@ ipcMain.handle('process-uploads', async (event, files, forceAi, manualSplit) => 
     } catch (err) {
         console.error('[IPC] Fatal error in process-uploads:', err);
         return { success: false, error: err.message };
+    }
+});
+
+ipcMain.handle('get-file-data', async (event, filePath) => {
+    try {
+        if (!fs.existsSync(filePath)) throw new Error('File not found');
+        const data = await fs.promises.readFile(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        let mimeType = 'application/octet-stream';
+        if (ext === '.pdf') mimeType = 'application/pdf';
+        else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+        else if (ext === '.png') mimeType = 'image/png';
+        
+        return `data:${mimeType};base64,${data.toString('base64')}`;
+    } catch (err) {
+        console.error('Error reading file for preview:', err);
+        return null;
     }
 });
 
