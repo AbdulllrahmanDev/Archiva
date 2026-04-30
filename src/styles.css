@@ -154,6 +154,22 @@ body {
     pointer-events: none;
 }
 
+/* Premium Button Interactions */
+button:active {
+    transform: scale(0.92) !important;
+    filter: brightness(1.2) !important;
+    transition: all 0.1s var(--cubic-premium) !important;
+}
+
+button:hover {
+    filter: brightness(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.bg-primary:active {
+    box-shadow: 0 0 20px var(--primary), inset 0 2px 4px rgba(0,0,0,0.2) !important;
+}
+
 /* Animations */
 @keyframes fadeInScale {
     from {
@@ -1202,6 +1218,17 @@ html.dark #settings-modal .bg-surface-container-low {
     animation: scale-in 0.5s var(--cubic-premium) forwards;
 }
 
+/* Card Interaction Feedback */
+.curator-card:active {
+    transform: scale(0.98);
+    background: var(--surface-container-high);
+    transition: all 0.1s ease;
+}
+
+.curator-card {
+    transition: all 0.4s var(--cubic-premium);
+}
+
 /* ============================================================
    PIPELINE VISUALIZER (Creative Workflow Bar)
    ============================================================ */
@@ -1277,6 +1304,27 @@ html.dark #pipeline-visualizer {
     box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--primary-container);
     transform: scale(1.05);
     animation: step-pulse 2s infinite;
+}
+
+/* Special animation for the PDF Split icon when active */
+.pipeline-step.active#step-split .step-icon-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent, var(--primary), transparent);
+    background-size: 100% 50%;
+    background-repeat: no-repeat;
+    animation: scan-line 1.5s infinite ease-in-out;
+    opacity: 0.3;
+    border-radius: inherit;
+}
+
+@keyframes scan-line {
+    0% { background-position: 0 -100%; }
+    100% { background-position: 0 200%; }
 }
 
 .pipeline-step.completed .step-icon-wrapper {
@@ -1367,4 +1415,4 @@ html.dark #pipeline-visualizer {
     animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
     border-color: var(--error) !important;
 }
-
+

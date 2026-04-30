@@ -36,7 +36,7 @@ const SVG_ICONS = {
     auto_awesome: 'M19 9l1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25L19 9zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5 5.5-2.5-5.5-2.5zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25L19 15z',
     cloud_upload: 'M19.35 10.04A7.49 7.49 0 0012 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 000 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z',
     arrow_right_alt: 'M16.01 11H4v2h12.01v3L20 12l-3.99-4z',
-    pdf: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M9.25 12h1.5a1.25 1.25 0 0 1 1.25 1.25a1.25 1.25 0 0 1-1.25 1.25h-1.5V17H7.75v-5h1.5z M9.25 13.25v1h1.5a.5.5 0 0 0 0-1h-1.5z',
+    pdf: 'M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-4 4.1h1.1c.5 0 .9.4.9.9s-.4.9-.9.9H9v1.6H7.8v-5h2.3c.5 0 .9.4.9.9s-.4.9-.9.9H9v.8zm4.3.9c0 .5-.4.9-.9.9h-1.1v-3.4h1.1c.5 0 .9.4.9.9v1.6zm-1.1-.1v-1.2h-.1v1.2h.1zm4.8-.8h-1.3v.7h1.1v.9h-1.1v1.8h-1.2v-5h2.5v.9z',
     image: 'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z',
     description: 'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z',
     add_comment: 'M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm0 14H4V4h16v12zm-2-7h-5v5h-2V9H6V7h5V2h2v5h5v2z',
@@ -197,7 +197,8 @@ const i18n = {
         password_title: "Secure Access",
         password_message: "Please enter the password to unlock these features.",
         unlock_btn: "Unlock Features",
-        wrong_password: "Incorrect Password"
+        wrong_password: "Incorrect Password",
+        open_in_system: "Open in System"
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -297,7 +298,8 @@ const i18n = {
         password_title: "وصول آمن",
         password_message: "يرجى إدخال كلمة السر لفتح هذه الخصائص",
         unlock_btn: "فتح الخصائص",
-        wrong_password: "كلمة السر خاطئة"
+        wrong_password: "كلمة السر خاطئة",
+        open_in_system: "فتح في النظام"
     }
 };
 
@@ -1611,13 +1613,16 @@ function renderArchiveGrid(data, container, isGrouped = false) {
 function renderGridCard(doc) {
     const isSelected = selectedDocIds.has(doc.id.toString());
     return `
-        <div class="curator-card group cursor-pointer relative ${isSelected ? 'ring-2 ring-primary' : ''}" onclick="handleDocClick(event, '${doc.id}')" data-doc-id="${doc.id}">
+        <div class="curator-card group cursor-pointer relative ${isSelected ? 'ring-2 ring-primary' : ''}" 
+            onclick="handleDocClick(event, '${doc.id}')" 
+            ondblclick="openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')"
+            data-doc-id="${doc.id}">
             ${isSelectionMode ? `
                 <div class="absolute top-4 right-4 z-20">
                     <input type="checkbox" class="w-5 h-5 rounded border-outline-variant/30 text-primary focus:ring-primary pointer-events-none" ${isSelected ? 'checked' : ''}>
                 </div>
             ` : ''}
-            <div class="card-preview" onclick="event.stopPropagation(); openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')">
+            <div class="card-preview">
                 <div class="card-preview-gradient"></div>
 
                 <div class="text-[1.75rem] font-black text-on-surface-variant/10 tracking-tighter uppercase select-none">${doc.type}</div>
@@ -1698,12 +1703,14 @@ function renderArchiveList(data, container, isGrouped = false) {
 function renderListRow(doc) {
     const isSelected = selectedDocIds.has(doc.id.toString());
     return `
-        <div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-surface-container-low transition-colors cursor-pointer group ${isSelected ? 'bg-primary/5' : ''}" onclick="handleDocClick(event, '${doc.id}')">
+        <div class="grid grid-cols-12 px-8 py-6 items-center hover:bg-surface-container-low transition-colors cursor-pointer group ${isSelected ? 'bg-primary/5' : ''}" 
+            onclick="handleDocClick(event, '${doc.id}')"
+            ondblclick="openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')">
             <div class="col-span-8 flex items-center gap-4">
                 ${isSelectionMode ? `
                     <input type="checkbox" class="w-5 h-5 rounded border-outline-variant/30 text-primary focus:ring-primary pointer-events-none" ${isSelected ? 'checked' : ''}>
                 ` : ''}
-                <div class="w-12 h-12 flex-shrink-0 bg-surface-container-highest rounded-xl flex items-center justify-center relative overflow-hidden border border-outline-variant/10 shadow-sm hover:border-primary/40 transition-all active:scale-95" onclick="event.stopPropagation(); openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')" title="${currentLang === 'ar' ? 'معاينة الملف' : 'Preview File'}">
+                <div class="w-12 h-12 flex-shrink-0 bg-surface-container-highest rounded-xl flex items-center justify-center relative overflow-hidden border border-outline-variant/10 shadow-sm hover:border-primary/40 transition-all active:scale-95" title="${currentLang === 'ar' ? 'معاينة الملف (نقر مزدوج)' : 'Preview File (Double Click)'}">
                     <div class="text-[9px] font-black text-on-surface-variant/40 uppercase tracking-tighter select-none">${doc.type}</div>
                 </div>
                 <div>
@@ -2061,12 +2068,15 @@ function selectDocument(id, isSoftUpdate = false) {
             <div class="h-px bg-outline-variant/10"></div>
             
             <!-- ملخص المحتوى (Content Summary) -->
-            <div class="p-6 bg-primary/5 rounded-3xl border border-primary/10 group/summary hover:bg-primary/8 transition-all">
+            <div id="field-summary-${doc.id}" class="p-6 bg-primary/5 rounded-3xl border border-primary/10 group/summary hover:bg-primary/8 transition-all cursor-context-menu" 
+                oncontextmenu="event.preventDefault(); !${isProcessing} && openFieldEditor(this, '${doc.id}', 'summary', \`${(doc.summary || '').replace(/`/g, "'")}\`, '${currentLang === 'ar' ? 'ملخص المحتوى' : 'Content Summary'}')"
+                title="${!isProcessing ? (currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit') : ''}">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center gap-2 text-primary">
                         <div class="sm">${getIcon('description')}</div>
                         <span class="text-[10px] font-black uppercase tracking-widest">${currentLang === 'ar' ? 'ملخص المحتوى' : 'Content Summary'}</span>
                     </div>
+                    ${!isProcessing ? `<span class="text-[8px] text-primary/30 font-bold opacity-0 group-hover/summary:opacity-100 transition-opacity">${currentLang === 'ar' ? 'كليك يمين للتعديل' : 'Right-click to edit'}</span>` : ''}
                 </div>
                 
                 ${isProcessing ? `
@@ -2075,7 +2085,7 @@ function selectDocument(id, isSoftUpdate = false) {
                         <div class="h-3 w-5/6 summary-loading-gradient"></div>
                     </div>
                 ` : `
-                    <p class="text-[14px] leading-relaxed text-on-surface font-bold italic">
+                    <p class="field-value text-[14px] leading-relaxed text-on-surface font-bold italic">
                         "${doc.summary || (currentLang === 'ar' ? 'لا يوجد ملخص متاح حالياً لهذه الوثيقة.' : 'No summary available for this document.')}"
                     </p>
                 `}
@@ -2083,9 +2093,10 @@ function selectDocument(id, isSoftUpdate = false) {
 
             <div class="space-y-4">
                 <h4 class="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/40 font-label">${t('action_control')}</h4>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="flex items-center gap-2 col-span-2">
-                        <button class="flex-1 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dim active:scale-95 transition-all flex items-center justify-center gap-2" onclick="window.api.openPath('${doc.file_path.replace(/\\/g, '\\\\')}')">
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center gap-2">
+                        <button class="flex-1 py-4 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-dim active:scale-95 transition-all flex items-center justify-center gap-2" 
+                            onclick="openPreview('${doc.file_path.replace(/\\/g, '\\\\')}', '${doc.type}', '${doc.title.replace(/'/g, "\\'")}')">
                             <span>${t('open_file')}</span>
                         </button>
                         ${isProcessing ? `
@@ -2102,9 +2113,16 @@ function selectDocument(id, isSoftUpdate = false) {
                         </button>
                         `}
                     </div>
-                    <button class="col-span-2 py-4 border border-outline-variant/10 text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-high active:scale-95 transition-all export-action-btn flex items-center justify-center gap-2">
-                        <span>${t('export')}</span>
-                    </button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button class="py-4 bg-surface-container-high text-primary border border-outline-variant/10 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-highest active:scale-95 transition-all flex items-center justify-center gap-2" 
+                            onclick="window.api.openPath('${doc.file_path.replace(/\\/g, '\\\\')}')">
+                            ${getIcon('arrow_outward', 'sm')}
+                            <span>${t('open_in_system')}</span>
+                        </button>
+                        <button class="py-4 border border-outline-variant/10 text-on-surface-variant text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-surface-container-high active:scale-95 transition-all export-action-btn flex items-center justify-center gap-2">
+                            <span>${t('export')}</span>
+                        </button>
+                    </div>
                 </div>
                 <p class="text-center text-[9px] text-on-surface-variant/40 font-bold">${t('last_analyzed')}: ${doc.date_added}</p>
             </div>
@@ -2188,7 +2206,7 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
     const valueEl = cardEl.querySelector('.field-value');
     if (!valueEl) return;
 
-    const isMultiline = ['subject', 'project'].includes(fieldKey);
+    const isMultiline = ['subject', 'project', 'summary'].includes(fieldKey);
     const isGovernorate = fieldKey === 'governorate';
     
     let inputEl;
@@ -2410,7 +2428,12 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
         if (fieldKey === 'version_no') p.classList.add('text-primary');
         if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
         
-        p.textContent = currentValue || '—';
+        if (fieldKey === 'summary') {
+            p.className = "field-value text-[14px] leading-relaxed text-on-surface font-bold italic";
+            p.textContent = `"${currentValue || ''}"`;
+        } else {
+            p.textContent = currentValue || '—';
+        }
         (inputEl.dropdownContainer || inputEl.container || inputEl).replaceWith(p);
         actions.remove();
         cardEl.classList.remove('is-editing');
@@ -2456,7 +2479,12 @@ window.openFieldEditor = function (cardEl, docId, fieldKey, currentValue, fieldL
                 if (fieldKey === 'version_no') p.classList.add('text-primary');
                 if (fieldKey === 'title') p.className = "field-value font-headline font-extrabold text-3xl tracking-tight text-on-surface leading-tight break-anywhere";
                 
-                p.textContent = newValue || '—';
+                if (fieldKey === 'summary') {
+                    p.className = "field-value text-[14px] leading-relaxed text-on-surface font-bold italic";
+                    p.textContent = `"${newValue}"`;
+                } else {
+                    p.textContent = newValue || '—';
+                }
                 (inputEl.dropdownContainer || inputEl.container || inputEl).replaceWith(p);
                 actions.remove();
                 cardEl.classList.remove('is-editing');
@@ -2650,7 +2678,9 @@ if (window.api) {
         // Step: AI Analysis
         else if (msgKey === 'status_ai') {
             setStepCompleted('step-upload', 'conn-upload');
-            if (isSplitActive) setStepCompleted('step-split', 'conn-split');
+            if (isSplitActive) {
+                setStepCompleted('step-split', 'conn-split');
+            }
             setStepActive('step-analyze');
         }
         // Step 3: Organizing / Saving
@@ -2679,7 +2709,15 @@ if (window.api) {
 
     function completePipeline() {
         const pipeline = document.getElementById('pipeline-visualizer');
-        setStepCompleted('step-organize', 'conn-3');
+        const isAiActive = forceAiForNextUpload || _autoAnalysisEnabled;
+        const isSplitActive = manualSplitForNextUpload;
+
+        // Ensure all intermediate steps are completed
+        setStepCompleted('step-upload', 'conn-upload');
+        if (isSplitActive) setStepCompleted('step-split', 'conn-split');
+        if (isAiActive) setStepCompleted('step-analyze', 'conn-analyze');
+        
+        setStepCompleted('step-organize', 'conn-organize');
         setStepActive('step-ready');
         pipeline.classList.add('success');
         
