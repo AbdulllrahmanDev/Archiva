@@ -183,7 +183,11 @@ const i18n = {
         update_success: "Update installed successfully.",
         latest_status: "Latest",
         update_avail_status: "Update Available",
-        version_comparison: "v{current} → v{new}"
+        version_comparison: "v{current} → v{new}",
+        password_title: "Secure Access",
+        password_message: "Please enter the password to unlock these features.",
+        unlock_btn: "Unlock Features",
+        wrong_password: "Incorrect Password"
     },
     ar: {
         nav_add: "إضافة ملف", nav_library: "الأرشيف", nav_ai: "ذكاء اصطناعي",
@@ -278,13 +282,19 @@ const i18n = {
         update_success: "تم التحديث بنجاح.",
         latest_status: "أحدث إصدار",
         update_avail_status: "تحديث متاح",
-        version_comparison: "v{current} ← v{new}"
+        version_comparison: "v{current} ← v{new}",
+        password_title: "وصول آمن",
+        password_message: "يرجى إدخال كلمة السر لفتح هذه الخصائص",
+        unlock_btn: "فتح الخصائص",
+        wrong_password: "كلمة السر خاطئة"
     }
 };
 
 let currentLang = localStorage.getItem('archiva-lang') || 'ar';
 let currentTheme = localStorage.getItem('archiva-theme') || 'light';
 let selectedDocIds = new Set();
+let isFeaturesUnlocked = localStorage.getItem('archiva-features-unlocked') === 'true';
+const FEATURE_PASSWORD = "Archiva1995";
 
 function setTheme(theme) {
     currentTheme = theme;
@@ -649,6 +659,60 @@ function confirmAction(titleKey, msgKey, type = 'error', customMsg = null, custo
         };
 
         okBtn.onclick = () => cleanup(true);
+        cancelBtn.onclick = () => cleanup(false);
+        backdrop.onclick = () => cleanup(false);
+    });
+}
+
+function requestFeatureUnlock() {
+    return new Promise((resolve) => {
+        if (isFeaturesUnlocked) return resolve(true);
+
+        const modal = document.getElementById('password-modal');
+        const title = document.getElementById('password-title');
+        const message = document.getElementById('password-message');
+        const input = document.getElementById('feature-password-input');
+        const unlockBtn = document.getElementById('password-unlock-btn');
+        const cancelBtn = document.getElementById('password-cancel-btn');
+        const backdrop = document.getElementById('password-backdrop');
+
+        if (!modal) return resolve(false);
+
+        title.innerText = t('password_title');
+        message.innerText = t('password_message');
+        unlockBtn.innerText = t('unlock_btn');
+        cancelBtn.innerText = t('cancel');
+        input.value = '';
+        input.placeholder = '••••••••';
+
+        modal.classList.remove('hidden');
+        input.focus();
+
+        const cleanup = (val) => {
+            modal.classList.add('hidden');
+            unlockBtn.onclick = null;
+            cancelBtn.onclick = null;
+            backdrop.onclick = null;
+            input.onkeydown = null;
+            resolve(val);
+        };
+
+        const attemptUnlock = () => {
+            if (input.value === FEATURE_PASSWORD) {
+                isFeaturesUnlocked = true;
+                localStorage.setItem('archiva-features-unlocked', 'true');
+                showToast(currentLang === 'ar' ? 'تم فتح جميع الخصائص بنجاح' : 'All features unlocked successfully');
+                cleanup(true);
+            } else {
+                input.classList.add('shake');
+                input.value = '';
+                input.placeholder = t('wrong_password');
+                setTimeout(() => input.classList.remove('shake'), 500);
+            }
+        };
+
+        unlockBtn.onclick = attemptUnlock;
+        input.onkeydown = (e) => { if (e.key === 'Enter') attemptUnlock(); };
         cancelBtn.onclick = () => cleanup(false);
         backdrop.onclick = () => cleanup(false);
     });
@@ -1654,8 +1718,10 @@ function enterStagingState() {
     if (forceToggle) {
         forceToggle.classList.remove('bg-primary', 'text-white', 'shadow-md');
         forceToggle.classList.add('bg-surface-container-low', 'text-on-surface-variant');
-        forceToggle.onclick = (e) => {
+        forceToggle.onclick = async (e) => {
             e.stopPropagation();
+            if (!(await requestFeatureUnlock())) return;
+            
             forceAiForNextUpload = !forceAiForNextUpload;
             if (forceAiForNextUpload) {
                 forceToggle.classList.remove('bg-surface-container-low', 'text-on-surface-variant');
@@ -2615,7 +2681,11 @@ if (window.api) {
 
 document.getElementById('nav-add').onclick = () => switchView('add');
 document.getElementById('nav-archive').onclick = () => switchView('archive');
-document.getElementById('nav-ai').onclick = () => switchView('ai');
+document.getElementById('nav-ai').onclick = async () => {
+    if (await requestFeatureUnlock()) {
+        switchView('ai');
+    }
+};
 
 const toastViewBtn = document.getElementById('toast-view-btn');
 if (toastViewBtn) toastViewBtn.onclick = () => switchView('archive');
@@ -2743,6 +2813,8 @@ async function initAutoAnalysisToggle() {
 const autoAnalysisToggleBtn = document.getElementById('auto-analysis-toggle');
 if (autoAnalysisToggleBtn) {
     autoAnalysisToggleBtn.addEventListener('click', async () => {
+        if (!(await requestFeatureUnlock())) return;
+
         const nextState = !_autoAnalysisEnabled;
 
         // Immediately flip UI for instant tactile feedback
@@ -2808,6 +2880,8 @@ async function initPdfSplitToggle() {
 const pdfSplitToggleBtn = document.getElementById('pdf-split-toggle');
 if (pdfSplitToggleBtn) {
     pdfSplitToggleBtn.addEventListener('click', async () => {
+        if (!(await requestFeatureUnlock())) return;
+
         const nextState = !_pdfSplitEnabled;
         setPdfSplitUI(nextState);
 

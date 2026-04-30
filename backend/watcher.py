@@ -25,7 +25,7 @@ _COOLDOWN_SECS   = 30
 
 _WATCH_FOLDER = os.environ.get('ARCHIVA_WATCH_FOLDER', '')
 
-_ENV_AUTO_ENABLED = os.environ.get('AUTO_ANALYSIS_ENABLED', '1') == '1'
+_ENV_AUTO_ENABLED = os.environ.get('AUTO_ANALYSIS_ENABLED', '0') == '1'
 _ENV_ACTIVATED_AT = os.environ.get('AUTO_ANALYSIS_ACTIVATED_AT', '')
 
 def _sentinel_dir():
