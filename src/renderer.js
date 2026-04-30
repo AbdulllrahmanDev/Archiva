@@ -301,7 +301,7 @@ function setTheme(theme) {
     localStorage.setItem('archiva-theme', theme);
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(theme);
-    window.api.setNativeTheme(theme); // Sync Electron Titlebar
+    window.api.setNativeTheme(theme); 
     updateSettingsUI();
     updateSegmentedIndicators();
 }

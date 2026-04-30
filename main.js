@@ -44,12 +44,12 @@ let mainWindow;
 let pythonProcess;
 let watchFolder;
 let db;
-let autoAnalysisEnabled = true;
+let autoAnalysisEnabled = false;
 let autoAnalysisActivatedAt = null;
 let pdfSplitEnabled = false;
-let smartProjectMatchingEnabled = true;
+let smartProjectMatchingEnabled = false;
 let activeProcesses = new Set();
-let isForceStopped = false; // Blocks any Python output after force stop
+let isForceStopped = false;
 
 function loadAutoAnalysisConfig() {
     const configPath = path.join(app.getPath('userData'), 'archiva-config.json');
@@ -62,8 +62,8 @@ function loadAutoAnalysisConfig() {
         }
     }
 
-    // Default: auto-analysis enabled
-    autoAnalysisEnabled = config.autoAnalysisEnabled !== false;
+    // By default, Auto-Analysis is disabled to save API credits
+    autoAnalysisEnabled = config.autoAnalysisEnabled === true;
 
     // If enabled but no activation timestamp yet, set one now (first-time bootstrap)
     if (autoAnalysisEnabled && !config.autoAnalysisActivatedAt) {
@@ -977,7 +977,6 @@ ipcMain.handle('reprocess-document', async (event, id, filePath) => {
                     args = [path.join(__dirname, 'backend', 'watcher.py'), '--process-file', filePath, watchFolder, '--id', id];
                 }
 
-                // Even for manual reprocess, if the global toggle is OFF, we skip AI unless we implement a 'force' flag
                 if (!autoAnalysisEnabled) {
                     args.push('--skip-ai');
                 }
@@ -1141,12 +1140,10 @@ ipcMain.handle('ai-chat', async (event, messages) => {
         return { error: 'API Key is missing. Please set OPENROUTER_API_KEY in the .env file.' };
     }
 
-    // Build shuffled key list for load balancing + fallback
     const apiKeys = rawApiKey.split(',').map(k => k.trim()).filter(k => k);
     if (apiKeys.length === 0) {
         return { error: 'Invalid API Key format in .env file.' };
     }
-    // Shuffle so we don't always hammer the first key
     for (let i = apiKeys.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [apiKeys[i], apiKeys[j]] = [apiKeys[j], apiKeys[i]];
@@ -1190,7 +1187,6 @@ ipcMain.handle('ai-chat', async (event, messages) => {
         return { role: msg.role, content: contentArray };
     }));
 
-    // Try each key in order — move to next on rate-limit or provider error
     let lastError = null;
     for (let i = 0; i < apiKeys.length; i++) {
         const apiKey = apiKeys[i];
@@ -1389,14 +1385,14 @@ ipcMain.handle('get-auto-analysis-status', async () => {
         try {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             return {
-                enabled: config.autoAnalysisEnabled !== false,
+                enabled: config.autoAnalysisEnabled === true,
                 activatedAt: config.autoAnalysisActivatedAt || null
             };
         } catch (e) {
             console.error('Error reading auto-analysis status:', e);
         }
     }
-    return { enabled: true, activatedAt: null };
+    return { enabled: false, activatedAt: null };
 });
 
 ipcMain.handle('toggle-auto-analysis', async (event, enabled) => {
